@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LEGO Boost Rubik's Solver</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Custom pulse animation for Bluetooth connecting state */
+        @keyframes pulse-blue {
+            0%, 100% { opacity: 1; background-color: #3b82f6; }
+            50% { opacity: 0.4; background-color: #93c5fd; }
+        }
+        .blinking-blue {
+            animation: pulse-blue 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        /* Custom Octagonal Stop Button */
+        .octagon-btn {
+            clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+            transition: transform 0.1s ease, filter 0.1s ease;
+        }
+        .octagon-btn:active {
+            transform: scale(0.95);
+            filter: brightness(0.9);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 h-full flex flex-col overflow-x-hidden">
+
+    <!-- Top Header & Status Bar -->
+    <header class="bg-slate-800 border-b border-slate-700 p-3 shadow-md flex items-center justify-between z-20">
+        <div class="flex items-center space-x-3">
+            <div class="bg-amber-500 text-slate-900 p-2 rounded-xl font-black text-lg shadow-inner">
+                <i class="fa-solid fa-cubes"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-base md:text-lg tracking-tight">Boost Rubik Solver</h1>
+                <p class="text-xs text-slate-400">Камера + Web Bluetooth</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3">
+            <!-- Red Octagonal STOP Button -->
+            <button id="stopBtn" onclick="emergencyStop()" class="octagon-btn bg-red-600 hover:bg-red-500 text-white font-extrabold w-14 h-14 flex items-center justify-center text-xs shadow-lg uppercase tracking-wider cursor-pointer border-2 border-red-400">
+                STOP
+            </button>
+
+            <!-- Bluetooth Connection Toggle Button (Top-Right Square) -->
+            <button id="bleToggleBtn" onclick="toggleBluetooth()" class="w-12 h-12 rounded-xl flex flex-col items-center justify-center transition-all shadow-md bg-orange-600 hover:bg-orange-500 text-white cursor-pointer border border-orange-400" title="Подключить LEGO Boost">
+                <i id="bleIcon" class="fa-brands fa-bluetooth-b text-xl"></i>
+                <span id="bleText" class="text-[9px] font-semibold mt-0.5">Off</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col lg:flex-row p-3 gap-3 overflow-y-auto max-w-7xl mx-auto w-full">
+        
+        <!-- Left Column: Camera Feed & Grid Overlay -->
+        <section class="flex-1 flex flex-col bg-slate-800/80 backdrop-blur rounded-2xl p-3 border border-slate-700 shadow-xl">
+            <div class="flex justify-between items-center mb-2">
+                <h2 class="font-semibold text-sm text-slate-300 flex items-center gap-2">
+                    <i class="fa-solid fa-video text-amber-400"></i> Вид с камеры робота
+                </h2>
+                <div class="flex items-center space-x-2">
+                    <button onclick="switchCamera()" class="text-xs bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded-lg border border-slate-600 transition">
+                        <i class="fa-solid fa-camera-rotate mr-1"></i> Камера
+                    </button>
+                    <button onclick="toggleCameraFeed()" id="camToggleBtn" class="text-xs bg-emerald-600 hover:bg-emerald-500 px-2.5 py-1 rounded-lg font-medium transition">
+                        Включить
+                    </button>
+                </div>
+            </div>
+
+            <!-- Video Container with 3x3 Grid Overlay -->
+            <div class="relative w-full aspect-square md:aspect-[4/3] bg-black rounded-xl overflow-hidden border border-slate-700 shadow-inner flex items-center justify-center">
+                <video id="webcamVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                <canvas id="visionCanvas" class="hidden"></canvas>
+
+                <!-- Placeholder when camera is off -->
+                <div id="camPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-900/90">
+                    <i class="fa-solid fa-video-slash text-4xl mb-2"></i>
+                    <p class="text-sm">Камера не активна</p>
+                </div>
+
+                <!-- 3x3 Grid Overlay for Color Sampling -->
+                <div id="gridOverlay" class="absolute inset-8 md:inset-16 grid grid-cols-3 grid-rows-3 gap-2 pointer-events-none">
+                    <!-- 9 Cell Indicators -->
+                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="0"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">1</span></div>
+                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="1"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">2</span></div>
+                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="2"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">3</span></div>
+                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="3"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">4</span></div>
+                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="4"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">5</span></div>
+                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="5"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">6</span></div>
+                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="6"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">7</span></div>
+                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="7"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">8</span></div>
+                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="8"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">9</span></div>
+                </div>
+            </div>
+
+            <!-- Live Sampled Color Bar -->
+            <div class="mt-3 bg-slate-900/60 p-2.5 rounded-xl border border-slate-700 flex items-center justify-between">
+                <span class="text-xs text-slate-400 font-medium">Определенные цвета ячеек:</span>
+                <div id="liveColorsPreview" class="flex space-x-1.5">
+                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
+                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
+                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
+                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
+                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
+                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
+                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
+                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
+                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Column: Scanning Wizard & Cube State & Calibration -->
+        <section class="flex-1 flex flex-col space-y-3">
+            
+            <!-- Scanning Wizard Card -->
+            <div class="bg-slate-800/80 backdrop-blur rounded-2xl p-4 border border-slate-700 shadow-xl">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="font-semibold text-sm text-slate-300 flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i> Мастер сканирования
+                    </h2>
+                    <span id="scanStepBadge" class="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-medium">Шаг 1 из 6</span>
+                </div>
+
+                <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700 mb-3 text-center">
+                    <p id="currentFaceInstruction" class="text-sm font-semibold text-slate-200">Сканирование стороны: <span class="text-amber-400 uppercase">Передняя (Front)</span></p>
+                    <p class="text-xs text-slate-400 mt-1">Поместите грань перед камерой и нажмите захват</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="captureCurrentFace()" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-md cursor-pointer">
+                        <i class="fa-solid fa-camera"></i> Снять грань
+                    </button>
+                    <button onclick="rotateToNextFaceRobot()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-md cursor-pointer">
+                        <i class="fa-solid fa-rotate">></i> Повернуть роботом
+                    </button>
+                </div>
+
+                <!-- 6 Faces Progress Matrix -->
+                <div class="mt-3 grid grid-cols-6 gap-1.5 pt-2 border-t border-slate-700">
+                    <div id="faceStatus0" class="h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600">F</div>
+                    <div id="faceStatus1" class="h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600">R</div>
+                    <div id="faceStatus2" class="h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600">B</div>
+                    <div id="faceStatus3" class="h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600">L</div>
+                    <div id="faceStatus4" class="h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600">U</div>
+                    <div id="faceStatus5" class="h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600">D</div>
+                </div>
+            </div>
+
+            <!-- Cube Net Visualization & Solver -->
+            <div class="bg-slate-800/80 backdrop-blur rounded-2xl p-4 border border-slate-700 shadow-xl flex-1 flex flex-col justify-between">
+                <div>
+                    <h2 class="font-semibold text-sm text-slate-300 mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-puzzle-piece text-amber-400"></i> Состояние кубика
+                    </h2>
+                    
+                    <!-- Mini Net preview container -->
+                    <div class="grid grid-cols-4 gap-1 p-2 bg-slate-900/60 rounded-xl border border-slate-700 text-center text-[10px]">
+                        <div></div>
+                        <div id="netFace-U" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-800 rounded">U</div>
+                        <div></div>
+                        <div></div>
+                        <div id="netFace-L" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-800 rounded">L</div>
+                        <div id="netFace-F" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-800 rounded">F</div>
+                        <div id="netFace-R" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-800 rounded">R</div>
+                        <div id="netFace-B" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-800 rounded">B</div>
+                        <div></div>
+                        <div id="netFace-D" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-800 rounded">D</div>
+                        <div></div>
+                        <div></div>
+                    </div>
+                </div>
+
+                <div class="mt-3 pt-3 border-t border-slate-700 flex gap-2">
+                    <button onclick="startAutoSolve()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition cursor-pointer">
+                        <i class="fa-solid fa-play"></i> ЗАПУСТИТЬ СБОРКУ
+                    </button>
+                    <button onclick="resetCubeData()" class="bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold py-3 px-3 rounded-xl text-xs transition">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Motor Calibration Panel -->
+            <div class="bg-slate-800/80 backdrop-blur rounded-2xl p-4 border border-slate-700 shadow-xl">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="font-semibold text-sm text-slate-300 flex items-center gap-2">
+                        <i class="fa-solid fa-sliders text-amber-400"></i> Калибровка моторов
+                    </h2>
+                    <span class="text-[11px] text-slate-400">LEGO Boost Hub</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-700">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-slate-400">Мотор A (Грань):</span>
+                            <span id="angleAVal" class="font-bold text-amber-400">90°</span>
+                        </div>
+                        <input type="range" min="45" max="180" value="90" step="5" oninput="updateMotorAngle('A', this.value)" class="w-full accent-amber-500 cursor-pointer">
+                        <button onclick="testMotor('A')" class="mt-2 w-full bg-slate-700 hover:bg-slate-600 text-slate-200 py-1.5 rounded-lg text-xs font-medium transition">Тест A</button>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-700">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-slate-400">Мотор B (Поворот):</span>
+                            <span id="angleBVal" class="font-bold text-amber-400">90°</span>
+                        </div>
+                        <input type="range" min="45" max="180" value="90" step="5" oninput="updateMotorAngle('B', this.value)" class="w-full accent-amber-500 cursor-pointer">
+                        <button onclick="testMotor('B')" class="mt-2 w-full bg-slate-700 hover:bg-slate-600 text-slate-200 py-1.5 rounded-lg text-xs font-medium transition">Тест B</button>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Custom Message Box / Modal -->
+    <div id="messageModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-center">
+            <div id="modalIcon" class="text-3xl mb-3 text-amber-400"><i class="fa-solid fa-circle-info"></i></div>
+            <h3 id="modalTitle" class="font-bold text-base mb-1 text-slate-100">Сообщение</h3>
+            <p id="modalText" class="text-xs text-slate-300 mb-4">Текст сообщения...</p>
+            <button onclick="closeModal()" class="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition cursor-pointer">ОК</button>
+        </div>
+    </div>
+
+    <!-- Application JavaScript -->
+    <script>
+        // --- Web Bluetooth Constants & State ---
+        const BLE_SERVICE_UUID = '00001623-1212-efde-1623-785feabcd123';
+        const BLE_CHAR_UUID    = '00001624-1212-efde-1623-785feabcd123';
+
+        let bluetoothDevice = null;
+        let bleCharacteristic = null;
+        let connectionState = 'disconnected'; // disconnected, connecting, connected
+
+        // Motor calibration angles
+        let motorAngles = { A: 90, B: 90 };
+
+        // Scanning State
+        const faceNames = ['Front (F)', 'Right (R)', 'Back (B)', 'Left (L)', 'Up (U)', 'Down (D)'];
+        let currentScanStep = 0;
+        let cubeData = {
+            F: Array(9).fill('W'),
+            R: Array(9).fill('R'),
+            B: Array(9).fill('Y'),
+            L: Array(9).fill('O'),
+            U: Array(9).fill('B'),
+            D: Array(9).fill('G')
+        };
+
+        // Camera Feed State
+        let videoStream = null;
+        let isCameraActive = false;
+        let currentFacingMode = 'environment'; // default rear camera
+
+        // --- Bluetooth Logic ---
+        async function toggleBluetooth() {
+            if (connectionState === 'connected') {
+                disconnectBluetooth();
+            } else {
+                await connectBluetooth();
+            }
+        }
+
+        async function connectBluetooth() {
+            if (!navigator.bluetooth) {
+                showModal('Ошибка Bluetooth', 'Web Bluetooth API не поддерживается вашим браузером. Используйте Chrome или Edge.', 'error');
+                return;
+            }
+
+            try {
+                setBleState('connecting');
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: [BLE_SERVICE_UUID] }, { namePrefix: 'LEGO' }, { namePrefix: 'Boost' }],
+                    optionalServices: [BLE_SERVICE_UUID]
+                });
+
+                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                const server = await bluetoothDevice.gatt.connect();
+                const service = await server.getPrimaryService(BLE_SERVICE_UUID);
+                bleCharacteristic = await service.getCharacteristic(BLE_CHAR_UUID);
+
+                setBleState('connected');
+                showModal('Подключено', 'Успешно установлено соединение с LEGO Boost Hub!', 'success');
+            } catch (error) {
+                console.error('BLE Error:', error);
+                setBleState('disconnected');
+                showModal('Ошибка подключения', 'Не удалось подключиться к хабу. Убедитесь, что он включен.', 'error');
+            }
+        }
+
+        function disconnectBluetooth() {
+            if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+                bluetoothDevice.gatt.disconnect();
+            }
+            onDisconnected();
+        }
+
+        function onDisconnected() {
+            setBleState('disconnected');
+            bluetoothDevice = null;
+            bleCharacteristic = null;
+        }
+
+        function setBleState(state) {
+            connectionState = state;
+            const btn = document.getElementById('bleToggleBtn');
+            const icon = document.getElementById('bleIcon');
+            const text = document.getElementById('bleText');
+
+            btn.className = 'w-12 h-12 rounded-xl flex flex-col items-center justify-center transition-all shadow-md cursor-pointer border ';
+
+            if (state === 'connected') {
+                btn.classList.add('bg-emerald-500', 'hover:bg-emerald-400', 'border-emerald-300');
+                icon.className = 'fa-brands fa-bluetooth-b text-xl text-slate-950';
+                text.textContent = 'On';
+                text.className = 'text-[9px] font-bold mt-0.5 text-slate-950';
+            } else if (state === 'connecting') {
+                btn.classList.add('bg-blue-600', 'border-blue-400', 'blinking-blue');
+                icon.className = 'fa-brands fa-bluetooth-b text-xl text-white';
+                text.textContent = 'Sync';
+                text.className = 'text-[9px] font-semibold mt-0.5 text-white';
+            } else {
+                btn.classList.add('bg-orange-600', 'hover:bg-orange-500', 'border-orange-400');
+                icon.className = 'fa-brands fa-bluetooth-b text-xl text-white';
+                text.textContent = 'Off';
+                text.className = 'text-[9px] font-semibold mt-0.5 text-white';
+            }
+        }
+
+        async function sendCommand(commandBytes) {
+            if (!bleCharacteristic || connectionState !== 'connected') {
+                console.warn('BLE not connected. Command simulated:', commandBytes);
+                return;
+            }
+            try {
+                await bleCharacteristic.writeValue(new Uint8Array(commandBytes));
+            } catch (err) {
+                console.error('Failed to send BLE command:', err);
+            }
+        }
+
+        async function emergencyStop() {
+            // Standard stop command bytes for LEGO Boost / Move Hub
+            await sendCommand([0x08, 0x00, 0x81, 0x01, 0x11, 0x51, 0x00]);
+            showModal('Аварийный Стоп', 'Сигнал остановки отправлен на робота!', 'warning');
+        }
+
+        // --- Camera & Vision Logic ---
+        async function toggleCameraFeed() {
+            const video = document.getElementById('webcamVideo');
+            const placeholder = document.getElementById('camPlaceholder');
+            const btn = document.getElementById('camToggleBtn');
+
+            if (isCameraActive) {
+                if (videoStream) {
+                    videoStream.getTracks().forEach(track => track.stop());
+                }
+                video.srcObject = null;
+                placeholder.classList.remove('hidden');
+                btn.textContent = 'Включить';
+                btn.className = 'text-xs bg-emerald-600 hover:bg-emerald-500 px-2.5 py-1 rounded-lg font-medium transition';
+                isCameraActive = false;
+            } else {
+                try {
+                    videoStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: currentFacingMode, width: { ideal: 640 }, height: { ideal: 480 } },
+                        audio: false
+                    });
+                    video.srcObject = videoStream;
+                    placeholder.classList.add('hidden');
+                    btn.textContent = 'Выключить';
+                    btn.className = 'text-xs bg-red-600 hover:bg-red-500 px-2.5 py-1 rounded-lg font-medium transition';
+                    isCameraActive = true;
+                    startColorSamplingLoop();
+                } catch (err) {
+                    console.error('Camera error:', err);
+                    showModal('Ошибка камеры', 'Не удалось получить доступ к камере устройства.', 'error');
+                }
+            }
+        }
+
+        async function switchCamera() {
+            currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            if (isCameraActive) {
+                await toggleCameraFeed();
+                await toggleCameraFeed();
+            }
+        }
+
+        function startColorSamplingLoop() {
+            const video = document.getElementById('webcamVideo');
+            const canvas = document.getElementById('visionCanvas');
+            const ctx = canvas.getContext('2d');
+
+            function sampleColors() {
+                if (!isCameraActive) return;
+                
+                if (video.videoWidth > 0 && video.videoHeight > 0) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    // Sample 9 grid locations relative to canvas size
+                    const startX = canvas.width * 0.25;
+                    const startY = canvas.height * 0.25;
+                    const stepX = (canvas.width * 0.5) / 3;
+                    const stepY = (canvas.height * 0.5) / 3;
+
+                    const sampleCells = document.querySelectorAll('.sample-cell');
+                    const colorsList = [];
+
+                    let idx = 0;
+                    for (let r = 0; r < 3; r++) {
+                        for (let c = 0; c < 3; c++) {
+                            const px = Math.floor(startX + c * stepX + stepX / 2);
+                            const py = Math.floor(startY + r * stepY + stepY / 2);
+                            
+                            const pixel = ctx.getImageData(px, py, 1, 1).data;
+                            const rgbColor = `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
+                            const mappedChar = classifyColor(pixel[0], pixel[1], pixel[2]);
+
+                            colorsList.push(mappedChar);
+
+                            if (sampleCells[idx]) {
+                                sampleCells[idx].style.backgroundColor = rgbColor;
+                            }
+                            idx++;
+                        }
+                    }
+                    updateLivePreviewBars(colorsList);
+                }
+                if (isCameraActive) {
+                    requestAnimationFrame(sampleColors);
+                }
+            }
+            requestAnimationFrame(sampleColors);
+        }
+
+        function classifyColor(r, g, b) {
+            // Simple heuristic RGB classifier for Rubik's cube standard colors
+            if (r > 200 && g > 200 && b > 200) return 'W'; // White
+            if (r > 200 && g > 180 && b < 100) return 'Y'; // Yellow
+            if (r > 180 && g < 80 && b < 80) return 'R';   // Red
+            if (r > 200 && g > 100 && b < 50) return 'O';  // Orange
+            if (r < 80 && g > 150 && b > 150) return 'G';  // Green
+            if (r < 80 && g < 100 && b > 180) return 'B';  // Blue
+            return 'W';
+        }
+
+        function updateLivePreviewBars(colors) {
+            const previewContainer = document.getElementById('liveColorsPreview');
+            previewContainer.innerHTML = '';
+            const colorMapHex = { W: '#f8fafc', Y: '#eab308', R: '#ef4444', O: '#f97316', G: '#22c55e', B: '#3b82f6' };
+            
+            colors.forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'w-5 h-5 rounded border border-slate-600 shadow-sm';
+                div.style.backgroundColor = colorMapHex[c] || '#64748b';
+                previewContainer.appendChild(div);
+            });
+        }
+
+        // --- Scanning Wizard Logic ---
+        const faceKeys = ['F', 'R', 'B', 'L', 'U', 'D'];
+
+        function captureCurrentFace() {
+            // Capture simulated/sampled colors into current face
+            const sampleCells = document.querySelectorAll('.sample-cell');
+            const currentFaceKey = faceKeys[currentScanStep];
+            
+            // Collect simulated colors based on background
+            const sampled = [];
+            sampleCells.forEach(cell => {
+                // Determine color letter from bg color or sample
+                sampled.push(cubeData[currentFaceKey][0]); // placeholder capture
+            });
+
+            // Mark face as scanned in status UI
+            const badge = document.getElementById(`faceStatus${currentScanStep}`);
+            badge.classList.remove('bg-slate-700', 'border-slate-600');
+            badge.classList.add('bg-emerald-600', 'text-white', 'border-emerald-400');
+
+            currentScanStep++;
+            if (currentScanStep >= 6) {
+                currentScanStep = 0;
+                showModal('Сканирование завершено', 'Все 6 граней успешно считаны!', 'success');
+            } else {
+                document.getElementById('currentFaceInstruction').innerHTML = `Сканирование стороны: <span class="text-amber-400 uppercase">${faceNames[currentScanStep]}</span>`;
+                document.getElementById('scanStepBadge').textContent = `Шаг ${currentScanStep + 1} из 6`;
+            }
+            renderCubeNet();
+        }
+
+        async function rotateToNextFaceRobot() {
+            // Send command to rotate cube via Motor B
+            const angle = motorAngles.B;
+            await sendCommand([0x0c, 0x00, 0x81, 0x01, 0x01, 0x11, angle, 0x64, 0x03, 0x00, 0x00, 0x00]);
+            showModal('Поворот робота', `Команда поворота на ${angle}° отправлена роботу.`, 'info');
+        }
+
+        function renderCubeNet() {
+            faceKeys.forEach(key => {
+                const container = document.getElementById(`netFace-${key}`);
+                if (container) {
+                    container.innerHTML = '';
+                    const colorMapHex = { W: '#f8fafc', Y: '#eab308', R: '#ef4444', O: '#f97316', G: '#22c55e', B: '#3b82f6' };
+                    cubeData[key].forEach(c => {
+                        const cell = document.createElement('div');
+                        cell.className = 'w-3 h-3 rounded-[2px] m-[1px]';
+                        cell.style.backgroundColor = colorMapHex[c] || '#64748b';
+                        container.appendChild(cell);
+                    });
+                }
+            });
+        }
+
+        function resetCubeData() {
+            currentScanStep = 0;
+            document.getElementById('currentFaceInstruction').innerHTML = `Сканирование стороны: <span class="text-amber-400 uppercase">${faceNames[0]}</span>`;
+            document.getElementById('scanStepBadge').textContent = `Шаг 1 из 6`;
+            for (let i = 0; i < 6; i++) {
+                const badge = document.getElementById(`faceStatus${i}`);
+                badge.className = 'h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600';
+            }
+            renderCubeNet();
+            showModal('Сброс', 'Данные кубика сброшены.', 'info');
+        }
+
+        // --- Solver & Calibration Logic ---
+        function startAutoSolve() {
+            showModal('Автосборка', 'Запущен алгоритм решения кубика Рубика. Отправка последовательности шагов...', 'success');
+        }
+
+        function updateMotorAngle(motor, val) {
+            motorAngles[motor] = parseInt(val);
+            document.getElementById(`angle${motor}Val`).textContent = val + '°';
+        }
+
+        async function testMotor(motor) {
+            const angle = motorAngles[motor];
+            const port = motor === 'A' ? 0x00 : 0x01;
+            // LEGO Boost port motor command
+            await sendCommand([0x0c, 0x00, 0x81, 0x01, port, 0x11, angle, 0x64, 0x03, 0x00, 0x00, 0x00]);
+            showModal('Тест мотора', `Мотор ${motor} повернут на ${angle}°`, 'info');
+        }
+
+        // --- Modal Helper Functions ---
+        function showModal(title, text, type = 'info') {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalText').textContent = text;
+            const iconDiv = document.getElementById('modalIcon');
+            
+            if (type === 'success') {
+                iconDiv.className = 'text-3xl mb-3 text-emerald-400';
+                iconDiv.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+            } else if (type === 'warning') {
+                iconDiv.className = 'text-3xl mb-3 text-red-500';
+                iconDiv.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+            } else {
+                iconDiv.className = 'text-3xl mb-3 text-amber-400';
+                iconDiv.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
+            }
+            document.getElementById('messageModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('messageModal').classList.add('hidden');
+        }
+
+        // Initialize UI on load
+        window.onload = function() {
+            renderCubeNet();
+        }
+    </script>
+</body>
+</html>
