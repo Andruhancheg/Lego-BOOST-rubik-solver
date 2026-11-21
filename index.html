@@ -1,587 +1,1027 @@
 <!DOCTYPE html>
-<html lang="ru" class="h-full">
+<html lang="ru" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LEGO Boost Rubik's Solver</title>
-    <!-- Tailwind CSS CDN -->
+    <title>LEGO Boost — Сборщик Кубика Рубика</title>
+    <!-- Подключение Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Подключение шрифта Inter и JetBrains Mono для логов -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        /* Custom pulse animation for Bluetooth connecting state */
-        @keyframes pulse-blue {
-            0%, 100% { opacity: 1; background-color: #3b82f6; }
-            50% { opacity: 0.4; background-color: #93c5fd; }
+        /* Восьмиугольник для знака STOP */
+        .stop-octagon {
+            clip-path: polygon(
+                30% 0%, 70% 0%, 
+                100% 30%, 100% 70%, 
+                70% 100%, 30% 100%, 
+                0% 70%, 0% 30%
+            );
         }
-        .blinking-blue {
-            animation: pulse-blue 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+        /* Анимация мигания синей кнопки BT при подключении */
+        @keyframes btPulse {
+            0%, 100% {
+                background-color: #3b82f6;
+                box-shadow: 0 0 15px rgba(59, 130, 246, 0.8);
+                transform: scale(1);
+            }
+            50% {
+                background-color: #1d4ed8;
+                box-shadow: 0 0 4px rgba(59, 130, 246, 0.3);
+                transform: scale(0.96);
+            }
         }
-        /* Custom Octagonal Stop Button */
-        .octagon-btn {
-            clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
-            transition: transform 0.1s ease, filter 0.1s ease;
+
+        .bt-connecting {
+            animation: btPulse 1s infinite ease-in-out;
         }
-        .octagon-btn:active {
-            transform: scale(0.95);
-            filter: brightness(0.9);
+
+        /* Стили для скроллбара логов */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Отключение выделения текста при быстрых нажатиях на кнопки моторов */
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
         }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 h-full flex flex-col overflow-x-hidden">
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col no-select">
 
-    <!-- Top Header & Status Bar -->
-    <header class="bg-slate-800 border-b border-slate-700 p-3 shadow-md flex items-center justify-between z-20">
-        <div class="flex items-center space-x-3">
-            <div class="bg-amber-500 text-slate-900 p-2 rounded-xl font-black text-lg shadow-inner">
-                <i class="fa-solid fa-cubes"></i>
-            </div>
-            <div>
-                <h1 class="font-bold text-base md:text-lg tracking-tight">Boost Rubik Solver</h1>
-                <p class="text-xs text-slate-400">Камера + Web Bluetooth</p>
-            </div>
-        </div>
-
-        <div class="flex items-center space-x-3">
-            <!-- Red Octagonal STOP Button -->
-            <button id="stopBtn" onclick="emergencyStop()" class="octagon-btn bg-red-600 hover:bg-red-500 text-white font-extrabold w-14 h-14 flex items-center justify-center text-xs shadow-lg uppercase tracking-wider cursor-pointer border-2 border-red-400">
-                STOP
+    <!-- ВЕРХНЯЯ ПАНЕЛЬ УПРАВЛЕНИЯ (FIXED HEADER) -->
+    <header class="sticky top-0 z-50 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-3 py-2.5 shadow-lg">
+        <div class="max-w-3xl mx-auto flex items-center justify-between gap-2">
+            
+            <!-- ЛЕВАЯ КНОПКА: ВОСЬМИУГОЛЬНИК STOP -->
+            <button id="btnStop" onclick="emergencyStop()" title="Экстренная остановка всех моторов"
+                class="relative w-14 h-14 sm:w-16 sm:h-16 flex-shrink-0 bg-white p-[3px] stop-octagon shadow-lg shadow-red-950/60 active:scale-90 transition-transform cursor-pointer focus:outline-none">
+                <div class="w-full h-full bg-red-600 hover:bg-red-500 stop-octagon flex items-center justify-center">
+                    <span class="text-white font-extrabold text-xs sm:text-sm tracking-wider">STOP</span>
+                </div>
             </button>
 
-            <!-- Bluetooth Connection Toggle Button (Top-Right Square) -->
-            <button id="bleToggleBtn" onclick="toggleBluetooth()" class="w-12 h-12 rounded-xl flex flex-col items-center justify-center transition-all shadow-md bg-orange-600 hover:bg-orange-500 text-white cursor-pointer border border-orange-400" title="Подключить LEGO Boost">
-                <i id="bleIcon" class="fa-brands fa-bluetooth-b text-xl"></i>
-                <span id="bleText" class="text-[9px] font-semibold mt-0.5">Off</span>
+            <!-- ЦЕНТР: ЗАГОЛОВОК И СТАТУС -->
+            <div class="flex flex-col items-center text-center flex-1 min-w-0 px-1">
+                <div class="flex items-center gap-1.5">
+                    <span class="inline-block w-2 h-2 rounded-full bg-amber-500" id="statusDot"></span>
+                    <h1 class="text-sm sm:text-base font-extrabold tracking-tight text-slate-100 truncate">
+                        LEGO BOOST CUBE
+                    </h1>
+                </div>
+                <p id="statusText" class="text-xs sm:text-sm font-medium text-slate-400 truncate mt-0.5">
+                    Нет соединения
+                </p>
+                <span id="batteryInfo" class="text-[10px] text-slate-500 hidden">Батарея: --%</span>
+            </div>
+
+            <!-- ПРАВАЯ КНОПКА: КВАДРАТНАЯ КНОПКА BLUETOOTH -->
+            <button id="btnBt" onclick="toggleBluetooth()" title="Подключить LEGO Move Hub"
+                class="w-14 h-14 sm:w-16 sm:h-16 flex-shrink-0 rounded-xl bg-orange-500 hover:bg-orange-400 text-white flex flex-col items-center justify-center shadow-lg shadow-orange-950/40 active:scale-95 transition-all cursor-pointer border-2 border-white/15">
+                <!-- Иконка Bluetooth SVG -->
+                <svg class="w-7 h-7 sm:w-8 sm:h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
+                </svg>
+                <span id="btLabel" class="text-[9px] font-bold uppercase tracking-wider mt-0.5">BT</span>
             </button>
+
         </div>
     </header>
 
-    <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col lg:flex-row p-3 gap-3 overflow-y-auto max-w-7xl mx-auto w-full">
-        
-        <!-- Left Column: Camera Feed & Grid Overlay -->
-        <section class="flex-1 flex flex-col bg-slate-800/80 backdrop-blur rounded-2xl p-3 border border-slate-700 shadow-xl">
-            <div class="flex justify-between items-center mb-2">
-                <h2 class="font-semibold text-sm text-slate-300 flex items-center gap-2">
-                    <i class="fa-solid fa-video text-amber-400"></i> Вид с камеры робота
-                </h2>
-                <div class="flex items-center space-x-2">
-                    <button onclick="switchCamera()" class="text-xs bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded-lg border border-slate-600 transition">
-                        <i class="fa-solid fa-camera-rotate mr-1"></i> Камера
-                    </button>
-                    <button onclick="toggleCameraFeed()" id="camToggleBtn" class="text-xs bg-emerald-600 hover:bg-emerald-500 px-2.5 py-1 rounded-lg font-medium transition">
-                        Включить
-                    </button>
-                </div>
-            </div>
-
-            <!-- Video Container with 3x3 Grid Overlay -->
-            <div class="relative w-full aspect-square md:aspect-[4/3] bg-black rounded-xl overflow-hidden border border-slate-700 shadow-inner flex items-center justify-center">
-                <video id="webcamVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
-                <canvas id="visionCanvas" class="hidden"></canvas>
-
-                <!-- Placeholder when camera is off -->
-                <div id="camPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-900/90">
-                    <i class="fa-solid fa-video-slash text-4xl mb-2"></i>
-                    <p class="text-sm">Камера не активна</p>
-                </div>
-
-                <!-- 3x3 Grid Overlay for Color Sampling -->
-                <div id="gridOverlay" class="absolute inset-8 md:inset-16 grid grid-cols-3 grid-rows-3 gap-2 pointer-events-none">
-                    <!-- 9 Cell Indicators -->
-                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="0"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">1</span></div>
-                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="1"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">2</span></div>
-                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="2"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">3</span></div>
-                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="3"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">4</span></div>
-                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="4"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">5</span></div>
-                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="5"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">6</span></div>
-                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="6"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">7</span></div>
-                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="7"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">8</span></div>
-                    <div class="border-2 border-dashed border-white/70 rounded-lg flex items-center justify-center bg-black/20 sample-cell" data-index="8"><span class="text-[10px] text-white/80 font-bold bg-black/50 px-1 rounded">9</span></div>
-                </div>
-            </div>
-
-            <!-- Live Sampled Color Bar -->
-            <div class="mt-3 bg-slate-900/60 p-2.5 rounded-xl border border-slate-700 flex items-center justify-between">
-                <span class="text-xs text-slate-400 font-medium">Определенные цвета ячеек:</span>
-                <div id="liveColorsPreview" class="flex space-x-1.5">
-                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
-                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
-                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
-                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
-                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
-                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
-                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
-                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
-                    <div class="w-5 h-5 rounded bg-slate-700 border border-slate-600"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Right Column: Scanning Wizard & Cube State & Calibration -->
-        <section class="flex-1 flex flex-col space-y-3">
-            
-            <!-- Scanning Wizard Card -->
-            <div class="bg-slate-800/80 backdrop-blur rounded-2xl p-4 border border-slate-700 shadow-xl">
-                <div class="flex justify-between items-center mb-3">
-                    <h2 class="font-semibold text-sm text-slate-300 flex items-center gap-2">
-                        <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i> Мастер сканирования
-                    </h2>
-                    <span id="scanStepBadge" class="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-medium">Шаг 1 из 6</span>
-                </div>
-
-                <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700 mb-3 text-center">
-                    <p id="currentFaceInstruction" class="text-sm font-semibold text-slate-200">Сканирование стороны: <span class="text-amber-400 uppercase">Передняя (Front)</span></p>
-                    <p class="text-xs text-slate-400 mt-1">Поместите грань перед камерой и нажмите захват</p>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2">
-                    <button onclick="captureCurrentFace()" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-md cursor-pointer">
-                        <i class="fa-solid fa-camera"></i> Снять грань
-                    </button>
-                    <button onclick="rotateToNextFaceRobot()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-md cursor-pointer">
-                        <i class="fa-solid fa-rotate">></i> Повернуть роботом
-                    </button>
-                </div>
-
-                <!-- 6 Faces Progress Matrix -->
-                <div class="mt-3 grid grid-cols-6 gap-1.5 pt-2 border-t border-slate-700">
-                    <div id="faceStatus0" class="h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600">F</div>
-                    <div id="faceStatus1" class="h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600">R</div>
-                    <div id="faceStatus2" class="h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600">B</div>
-                    <div id="faceStatus3" class="h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600">L</div>
-                    <div id="faceStatus4" class="h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600">U</div>
-                    <div id="faceStatus5" class="h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600">D</div>
-                </div>
-            </div>
-
-            <!-- Cube Net Visualization & Solver -->
-            <div class="bg-slate-800/80 backdrop-blur rounded-2xl p-4 border border-slate-700 shadow-xl flex-1 flex flex-col justify-between">
-                <div>
-                    <h2 class="font-semibold text-sm text-slate-300 mb-2 flex items-center gap-2">
-                        <i class="fa-solid fa-puzzle-piece text-amber-400"></i> Состояние кубика
-                    </h2>
-                    
-                    <!-- Mini Net preview container -->
-                    <div class="grid grid-cols-4 gap-1 p-2 bg-slate-900/60 rounded-xl border border-slate-700 text-center text-[10px]">
-                        <div></div>
-                        <div id="netFace-U" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-800 rounded">U</div>
-                        <div></div>
-                        <div></div>
-                        <div id="netFace-L" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-800 rounded">L</div>
-                        <div id="netFace-F" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-800 rounded">F</div>
-                        <div id="netFace-R" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-800 rounded">R</div>
-                        <div id="netFace-B" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-800 rounded">B</div>
-                        <div></div>
-                        <div id="netFace-D" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-800 rounded">D</div>
-                        <div></div>
-                        <div></div>
-                    </div>
-                </div>
-
-                <div class="mt-3 pt-3 border-t border-slate-700 flex gap-2">
-                    <button onclick="startAutoSolve()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition cursor-pointer">
-                        <i class="fa-solid fa-play"></i> ЗАПУСТИТЬ СБОРКУ
-                    </button>
-                    <button onclick="resetCubeData()" class="bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold py-3 px-3 rounded-xl text-xs transition">
-                        <i class="fa-solid fa-rotate-right"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Motor Calibration Panel -->
-            <div class="bg-slate-800/80 backdrop-blur rounded-2xl p-4 border border-slate-700 shadow-xl">
-                <div class="flex justify-between items-center mb-2">
-                    <h2 class="font-semibold text-sm text-slate-300 flex items-center gap-2">
-                        <i class="fa-solid fa-sliders text-amber-400"></i> Калибровка моторов
-                    </h2>
-                    <span class="text-[11px] text-slate-400">LEGO Boost Hub</span>
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-700">
-                        <div class="flex justify-between text-xs mb-1">
-                            <span class="text-slate-400">Мотор A (Грань):</span>
-                            <span id="angleAVal" class="font-bold text-amber-400">90°</span>
-                        </div>
-                        <input type="range" min="45" max="180" value="90" step="5" oninput="updateMotorAngle('A', this.value)" class="w-full accent-amber-500 cursor-pointer">
-                        <button onclick="testMotor('A')" class="mt-2 w-full bg-slate-700 hover:bg-slate-600 text-slate-200 py-1.5 rounded-lg text-xs font-medium transition">Тест A</button>
-                    </div>
-
-                    <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-700">
-                        <div class="flex justify-between text-xs mb-1">
-                            <span class="text-slate-400">Мотор B (Поворот):</span>
-                            <span id="angleBVal" class="font-bold text-amber-400">90°</span>
-                        </div>
-                        <input type="range" min="45" max="180" value="90" step="5" oninput="updateMotorAngle('B', this.value)" class="w-full accent-amber-500 cursor-pointer">
-                        <button onclick="testMotor('B')" class="mt-2 w-full bg-slate-700 hover:bg-slate-600 text-slate-200 py-1.5 rounded-lg text-xs font-medium transition">Тест B</button>
-                    </div>
-                </div>
-            </div>
-
-        </section>
-    </main>
-
-    <!-- Custom Message Box / Modal -->
-    <div id="messageModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-center">
-            <div id="modalIcon" class="text-3xl mb-3 text-amber-400"><i class="fa-solid fa-circle-info"></i></div>
-            <h3 id="modalTitle" class="font-bold text-base mb-1 text-slate-100">Сообщение</h3>
-            <p id="modalText" class="text-xs text-slate-300 mb-4">Текст сообщения...</p>
-            <button onclick="closeModal()" class="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition cursor-pointer">ОК</button>
-        </div>
+    <!-- УВЕДОМЛЕНИЯ (ВСПЛЫВАЮЩИЙ БАННЕР ВМЕСТО ALERT) -->
+    <div id="toastBanner" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 hidden max-w-sm w-[92%] bg-slate-800 border border-slate-600 text-slate-100 px-4 py-3 rounded-xl shadow-2xl text-xs sm:text-sm flex items-center justify-between gap-3 transition-all">
+        <span id="toastMessage">Сообщение</span>
+        <button onclick="hideToast()" class="text-slate-400 hover:text-white font-bold px-1.5 py-0.5">✕</button>
     </div>
 
-    <!-- Application JavaScript -->
+    <!-- ОСНОВНОЙ КОНТЕНТ -->
+    <main class="flex-1 max-w-3xl w-full mx-auto p-3 sm:p-4 space-y-5">
+
+        <!-- ПЕРЕКЛЮЧАТЕЛЬ РЕЖИМОВ (СКАНЕР / КАЛИБРОВКА / ВСЁ СРАЗУ) И ДЕМО-РЕЖИМ -->
+        <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+            <div class="flex items-center gap-2">
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="demoModeToggle" class="sr-only peer" checked onchange="toggleDemoMode()">
+                    <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                    <span class="ml-2 text-xs font-medium text-slate-300">Демо-режим (без хаба)</span>
+                </label>
+            </div>
+            <div class="text-[11px] text-slate-400 flex items-center gap-1">
+                <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>Требуется HTTPS (GitHub Pages) и Chrome / Bluefy</span>
+            </div>
+        </div>
+
+        <!-- РАЗДЕЛ 1: СКАНЕР КУБИКА РУБИКА (КАМЕРА + СЕТКА 3x3) -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <h2 class="font-bold text-sm sm:text-base text-slate-100">1. Сканер грани кубика</h2>
+                </div>
+                <span id="cameraStatusBadge" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-mono">
+                    Камера: выкл
+                </span>
+            </div>
+
+            <div class="p-3 sm:p-4 space-y-4">
+                <!-- КОНТЕЙНЕР ВИДЕО С НАЛОЖЕННОЙ СЕТКОЙ 3x3 -->
+                <div class="relative w-full aspect-square max-w-[360px] mx-auto bg-slate-950 rounded-2xl overflow-hidden border-2 border-slate-700 shadow-inner flex items-center justify-center">
+                    
+                    <!-- Поток с камеры -->
+                    <video id="cameraVideo" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
+                    
+                    <!-- Заглушка, если камера не запущена -->
+                    <div id="cameraPlaceholder" class="flex flex-col items-center justify-center text-center p-6 space-y-3">
+                        <div class="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center text-slate-400">
+                            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                        </div>
+                        <p class="text-xs text-slate-400">Нажмите «Включить камеру», чтобы совместить грань кубика с сеткой 3×3</p>
+                        <button onclick="startCamera()" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-xl shadow transition">
+                            Включить камеру
+                        </button>
+                    </div>
+
+                    <!-- ОВЕРЛЕЙ СЕТКИ 3x3 ДЛЯ ПРИЦЕЛИВАНИЯ -->
+                    <div id="gridOverlay" class="absolute inset-0 pointer-events-none flex items-center justify-center p-6 sm:p-8">
+                        <div class="w-full h-full grid grid-cols-3 grid-rows-3 gap-2 sm:gap-3 border-2 border-white/40 rounded-xl p-2 bg-black/10">
+                            <!-- 9 ячеек создаются через JS для живого отображения распознанного цвета -->
+                        </div>
+                    </div>
+
+                    <!-- Скрытый canvas для анализа пикселей -->
+                    <canvas id="samplingCanvas" class="hidden"></canvas>
+                </div>
+
+                <!-- КНОПКИ УПРАВЛЕНИЯ КАМЕРОЙ И ВСПЫШКОЙ -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-w-[440px] mx-auto">
+                    <button id="btnToggleCamera" onclick="toggleCamera()"
+                        class="py-3 px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-100 rounded-xl font-semibold text-xs sm:text-sm border border-slate-700 flex items-center justify-center gap-1.5 transition">
+                        <span>📷</span>
+                        <span id="btnCameraText">Камера ВКЛ</span>
+                    </button>
+
+                    <button id="btnTorch" onclick="toggleTorch()"
+                        class="py-3 px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-100 rounded-xl font-semibold text-xs sm:text-sm border border-slate-700 flex items-center justify-center gap-1.5 transition">
+                        <span id="torchIcon">🔦</span>
+                        <span id="torchText">Вспышка: ВЫКЛ</span>
+                    </button>
+
+                    <button onclick="scanCubeFace()"
+                        class="col-span-2 sm:col-span-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-1.5 transition">
+                        <span>🎯</span>
+                        <span>Сканировать грань</span>
+                    </button>
+                </div>
+
+                <!-- РЕЗУЛЬТАТ СКАНИРОВАНИЯ (3x3 ПРЕВЬЮ С РУЧНОЙ КОРРЕКЦИЕЙ) -->
+                <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 max-w-[440px] mx-auto">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-slate-300">Распознанная грань (нажмите на клетку для правки):</span>
+                        <button onclick="resetScannedGrid()" class="text-[11px] text-slate-400 hover:text-white underline">Сброс</button>
+                    </div>
+                    <div id="scannedPreviewGrid" class="grid grid-cols-3 gap-2 w-40 h-40 mx-auto p-2 bg-slate-900 rounded-xl border border-slate-800">
+                        <!-- 9 интерактивных плиток -->
+                    </div>
+                    <div id="scannedColorsText" class="mt-2.5 text-center font-mono text-[11px] text-slate-400">
+                        Ожидание сканирования...
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- РАЗДЕЛ 2: КАЛИБРОВКА МОТОРОВ LEGO BOOST -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                    <h2 class="font-bold text-sm sm:text-base text-slate-100">2. Калибровка механики и моторов</h2>
+                </div>
+                <span class="text-[11px] font-mono text-slate-400">LWP 3.0</span>
+            </div>
+
+            <div class="p-3 sm:p-4 space-y-4">
+
+                <!-- НАСТРОЙКА СКОРОСТИ КАЛИБРОВКИ -->
+                <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <label for="motorSpeedSlider" class="text-xs font-semibold text-slate-300">
+                        Мощность / Скорость моторов: <span id="motorSpeedVal" class="text-amber-400 font-mono font-bold">45%</span>
+                    </label>
+                    <input id="motorSpeedSlider" type="range" min="15" max="100" value="45" step="5"
+                        oninput="document.getElementById('motorSpeedVal').textContent = this.value + '%'"
+                        class="w-full sm:w-48 accent-amber-500 cursor-pointer">
+                </div>
+
+                <!-- КАРТОЧКА 1: МОТОР A (ВЕРТИКАЛЬНЫЙ ТОЛКАТЕЛЬ / ПЕРЕВОРОТ) -->
+                <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                                <span class="px-2 py-0.5 text-xs font-mono bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded">Порт A</span>
+                                Толкатель (Переворот кубика)
+                            </h3>
+                            <p class="text-[11px] text-slate-400 mt-0.5">Вертикальный рычаг для опрокидывания кубика на 90°</p>
+                        </div>
+                        <span id="posMotorA" class="font-mono text-xs text-slate-400 bg-slate-900 px-2 py-1 rounded border border-slate-800">0°</span>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="rotateMotor(0x00, 90)"
+                            class="py-3 px-2 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-xl font-bold text-xs shadow transition">
+                            Толкнуть (+90°)
+                        </button>
+                        <button onclick="rotateMotor(0x00, -90)"
+                            class="py-3 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-100 border border-slate-700 rounded-xl font-bold text-xs transition">
+                            Вернуть (-90°)
+                        </button>
+                        <button onclick="flipSequenceTest()"
+                            class="py-3 px-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-xl font-bold text-xs shadow transition">
+                            Цикл переворота
+                        </button>
+                    </div>
+
+                    <!-- Тонкая подстройка шага Мотора A -->
+                    <div class="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                        <span class="text-[11px] text-slate-400">Точная подстройка нуля:</span>
+                        <div class="flex gap-2">
+                            <button onclick="rotateMotor(0x00, -10)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-lg text-xs font-mono border border-slate-700">-10°</button>
+                            <button onclick="rotateMotor(0x00, -5)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-lg text-xs font-mono border border-slate-700">-5°</button>
+                            <button onclick="rotateMotor(0x00, 5)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-lg text-xs font-mono border border-slate-700">+5°</button>
+                            <button onclick="rotateMotor(0x00, 10)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-lg text-xs font-mono border border-slate-700">+10°</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- КАРТОЧКА 2: МОТОР B (КЛЕШНЯ-ФИКСАТОР ДВУХ ВЕРХНИХ ГРАНЕЙ) -->
+                <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                                <span class="px-2 py-0.5 text-xs font-mono bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded">Порт B</span>
+                                Клешня (Фиксатор верхних слоев)
+                            </h3>
+                            <p class="text-[11px] text-slate-400 mt-0.5">Удерживает 2 верхних ряда при вращении нижней грани</p>
+                        </div>
+                        <span id="posMotorB" class="font-mono text-xs text-slate-400 bg-slate-900 px-2 py-1 rounded border border-slate-800">0°</span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <button onclick="rotateMotor(0x01, 65)"
+                            class="py-3 px-3 bg-purple-600 hover:bg-purple-500 active:scale-95 text-white rounded-xl font-bold text-xs sm:text-sm shadow transition flex items-center justify-center gap-1.5">
+                            <span>🔒</span> Зажать (+65°)
+                        </button>
+                        <button onclick="rotateMotor(0x01, -65)"
+                            class="py-3 px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-100 border border-slate-700 rounded-xl font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5">
+                            <span>🔓</span> Отпустить (-65°)
+                        </button>
+                    </div>
+
+                    <!-- Тонкая подстройка шага Мотора B -->
+                    <div class="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                        <span class="text-[11px] text-slate-400">Калибровка прижима:</span>
+                        <div class="flex gap-2">
+                            <button onclick="rotateMotor(0x01, -10)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-lg text-xs font-mono border border-slate-700">-10°</button>
+                            <button onclick="rotateMotor(0x01, -5)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-lg text-xs font-mono border border-slate-700">-5°</button>
+                            <button onclick="rotateMotor(0x01, 5)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-lg text-xs font-mono border border-slate-700">+5°</button>
+                            <button onclick="rotateMotor(0x01, 10)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-lg text-xs font-mono border border-slate-700">+10°</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- КАРТОЧКА 3: ВНЕШНИЙ МОТОР C (ПОВОРОТНАЯ ПЛОЩАДКА) -->
+                <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                                <span class="px-2 py-0.5 text-xs font-mono bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded">Порт C</span>
+                                Площадка (Вращение платформы)
+                            </h3>
+                            <p class="text-[11px] text-slate-400 mt-0.5">Вращает основание с кубиком (учитывайте передаточное число шестерен)</p>
+                        </div>
+                        <span id="posMotorC" class="font-mono text-xs text-slate-400 bg-slate-900 px-2 py-1 rounded border border-slate-800">0°</span>
+                    </div>
+
+                    <!-- Настройка множителя редуктора площадки -->
+                    <div class="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg border border-slate-800">
+                        <span class="text-xs text-slate-300">Коэфф. редуктора площадки:</span>
+                        <select id="gearRatioSelect" class="bg-slate-800 text-amber-400 font-mono text-xs px-2 py-1 rounded border border-slate-700 focus:outline-none">
+                            <option value="1">1:1 (90° мотора = 90°)</option>
+                            <option value="3" selected>3:1 (270° мотора = 90°)</option>
+                            <option value="5">5:1 (450° мотора = 90°)</option>
+                            <option value="-3">-3:1 (Инверсия 3:1)</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="rotateTurntable(-90)"
+                            class="py-3 px-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white rounded-xl font-bold text-xs shadow transition">
+                            ↺ -90° (Против ЧС)
+                        </button>
+                        <button onclick="rotateTurntable(90)"
+                            class="py-3 px-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white rounded-xl font-bold text-xs shadow transition">
+                            ↻ +90° (По ЧС)
+                        </button>
+                        <button onclick="rotateTurntable(180)"
+                            class="py-3 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-400 border border-amber-500/40 rounded-xl font-bold text-xs transition">
+                            ↻ 180°
+                        </button>
+                    </div>
+
+                    <!-- Тонкая подстройка площадки -->
+                    <div class="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                        <span class="text-[11px] text-slate-400">Точный доворот (градусы мотора):</span>
+                        <div class="flex gap-2">
+                            <button onclick="rotateMotor(0x02, -15)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-lg text-xs font-mono border border-slate-700">-15°</button>
+                            <button onclick="rotateMotor(0x02, -5)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-lg text-xs font-mono border border-slate-700">-5°</button>
+                            <button onclick="rotateMotor(0x02, 5)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-lg text-xs font-mono border border-slate-700">+5°</button>
+                            <button onclick="rotateMotor(0x02, 15)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-lg text-xs font-mono border border-slate-700">+15°</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- РАЗДЕЛ 3: КОНСОЛЬ ОТЛАДКИ LWP 3.0 -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            <div class="px-4 py-2.5 border-b border-slate-800 flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-300 font-mono">Журнал команд LEGO Wireless Protocol 3.0</span>
+                <button onclick="clearLogs()" class="text-[11px] text-slate-400 hover:text-white">Очистить</button>
+            </div>
+            <div id="logConsole" class="p-3 h-36 overflow-y-auto font-mono text-[11px] space-y-1 bg-slate-950 text-slate-300">
+                <div class="text-slate-500">[Система] Инициализация интерфейса завершена. Готов к работе.</div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ПОДВАЛ -->
+    <footer class="text-center py-4 text-[11px] text-slate-500 border-t border-slate-900 mt-4">
+        LEGO Boost Rubik's Cube Solver • Web Bluetooth & Computer Vision • GitHub Pages Ready
+    </footer>
+
     <script>
-        // --- Web Bluetooth Constants & State ---
-        const BLE_SERVICE_UUID = '00001623-1212-efde-1623-785feabcd123';
-        const BLE_CHAR_UUID    = '00001624-1212-efde-1623-785feabcd123';
+        /**
+         * КОНСТАНТЫ LEGO WIRELESS PROTOCOL 3.0 (MOVE HUB)
+         */
+        const LWP_SERVICE_UUID = '00001623-1212-efde-1623-785feabcd123';
+        const LWP_CHAR_UUID    = '00001624-1212-efde-1623-785feabcd123';
 
-        let bluetoothDevice = null;
-        let bleCharacteristic = null;
-        let connectionState = 'disconnected'; // disconnected, connecting, connected
+        // Порты LEGO Boost Move Hub
+        const PORT_A = 0x00; // Встроенный мотор A (Толкатель)
+        const PORT_B = 0x01; // Встроенный мотор B (Клешня)
+        const PORT_C = 0x02; // Внешний порт C (Площадка)
+        const PORT_D = 0x03; // Внешний порт D (резерв)
 
-        // Motor calibration angles
-        let motorAngles = { A: 90, B: 90 };
+        // Состояние Bluetooth
+        let btDevice = null;
+        let btServer = null;
+        let btCharacteristic = null;
+        let btState = 'disconnected'; // 'disconnected' | 'connecting' | 'connected'
+        let isDemoMode = true;
+        let abortSequenceFlag = false;
 
-        // Scanning State
-        const faceNames = ['Front (F)', 'Right (R)', 'Back (B)', 'Left (L)', 'Up (U)', 'Down (D)'];
-        let currentScanStep = 0;
-        let cubeData = {
-            F: Array(9).fill('W'),
-            R: Array(9).fill('R'),
-            B: Array(9).fill('Y'),
-            L: Array(9).fill('O'),
-            U: Array(9).fill('B'),
-            D: Array(9).fill('G')
+        // Виртуальные счетчики углов моторов для удобства калибровки
+        const motorAngles = {
+            [PORT_A]: 0,
+            [PORT_B]: 0,
+            [PORT_C]: 0
         };
 
-        // Camera Feed State
-        let videoStream = null;
-        let isCameraActive = false;
-        let currentFacingMode = 'environment'; // default rear camera
+        // Состояние камеры и фонарика
+        let mediaStream = null;
+        let videoTrack = null;
+        let isTorchOn = false;
+        let liveScanInterval = null;
 
-        // --- Bluetooth Logic ---
-        async function toggleBluetooth() {
-            if (connectionState === 'connected') {
-                disconnectBluetooth();
-            } else {
-                await connectBluetooth();
+        // Эталонные цвета кубика Рубика (RGB + названия)
+        const RUBIK_COLORS = [
+            { id: 'W', name: 'Белый',     hex: '#f8fafc', rgb: [240, 240, 240] },
+            { id: 'Y', name: 'Жёлтый',    hex: '#facc15', rgb: [235, 210, 25]  },
+            { id: 'R', name: 'Красный',   hex: '#ef4444', rgb: [215, 40, 40]   },
+            { id: 'O', name: 'Оранжевый', hex: '#f97316', rgb: [235, 110, 25]  },
+            { id: 'B', name: 'Синий',     hex: '#3b82f6', rgb: [30, 90, 215]   },
+            { id: 'G', name: 'Зелёный',   hex: '#22c55e', rgb: [30, 185, 75]   }
+        ];
+
+        // Текущая отсканированная грань (9 плиток)
+        let scannedFace = Array(9).fill(RUBIK_COLORS[0]);
+
+        /**
+         * ИНИЦИАЛИЗАЦИЯ ИНТЕРФЕЙСА ПРИ ЗАГРУЗКЕ
+         */
+        window.addEventListener('DOMContentLoaded', () => {
+            initOverlayGrid();
+            renderScannedGrid();
+            updateBtUI('disconnected');
+        });
+
+        /**
+         * УПРАВЛЕНИЕ СОСТОЯНИЕМ КНОПКИ BLUETOOTH (ОРАНЖЕВЫЙ / СИНИЙ МИГАЮЩИЙ / ЗЕЛЕНЫЙ)
+         */
+        function updateBtUI(state) {
+            btState = state;
+            const btn = document.getElementById('btnBt');
+            const label = document.getElementById('btLabel');
+            const statusText = document.getElementById('statusText');
+            const statusDot = document.getElementById('statusDot');
+
+            // Сброс классов цвета и анимации
+            btn.classList.remove('bg-orange-500', 'hover:bg-orange-400', 'bg-blue-600', 'bt-connecting', 'bg-emerald-500', 'hover:bg-emerald-400');
+            statusDot.classList.remove('bg-amber-500', 'bg-blue-500', 'animate-ping', 'bg-emerald-500', 'bg-red-500');
+
+            if (state === 'disconnected') {
+                btn.classList.add('bg-orange-500', 'hover:bg-orange-400');
+                label.textContent = 'НЕТ BT';
+                statusText.textContent = isDemoMode ? 'Нет соединения (Демо-режим)' : 'Нет соединения';
+                statusDot.classList.add('bg-amber-500');
+            } else if (state === 'connecting') {
+                btn.classList.add('bg-blue-600', 'bt-connecting');
+                label.textContent = 'ПОИСК';
+                statusText.textContent = 'Идет соединение с хабом...';
+                statusDot.classList.add('bg-blue-500');
+            } else if (state === 'connected') {
+                btn.classList.add('bg-emerald-500', 'hover:bg-emerald-400');
+                label.textContent = 'OK';
+                statusText.textContent = 'Подключено: LEGO Move Hub';
+                statusDot.classList.add('bg-emerald-500');
             }
         }
 
-        async function connectBluetooth() {
+        function toggleDemoMode() {
+            isDemoMode = document.getElementById('demoModeToggle').checked;
+            logMessage(`Демо-режим ${isDemoMode ? 'ВКЛЮЧЕН' : 'ВЫКЛЮЧЕН'}.`);
+            if (btState === 'disconnected') {
+                updateBtUI('disconnected');
+            }
+        }
+
+        /**
+         * ПОДКЛЮЧЕНИЕ / ОТКЛЮЧЕНИЕ WEB BLUETOOTH
+         */
+        async function toggleBluetooth() {
+            if (btState === 'connected' && btDevice) {
+                logMessage('Отключение от LEGO Move Hub...');
+                btDevice.gatt.disconnect();
+                updateBtUI('disconnected');
+                return;
+            }
+
             if (!navigator.bluetooth) {
-                showModal('Ошибка Bluetooth', 'Web Bluetooth API не поддерживается вашим браузером. Используйте Chrome или Edge.', 'error');
+                showToast('Web Bluetooth не поддерживается этим браузером. Используйте Chrome на Android/ПК или Bluefy на iOS.');
+                logMessage('Ошибка: navigator.bluetooth недоступен (требуется HTTPS и совместимый браузер).', 'error');
                 return;
             }
 
             try {
-                setBleState('connecting');
-                bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: [BLE_SERVICE_UUID] }, { namePrefix: 'LEGO' }, { namePrefix: 'Boost' }],
-                    optionalServices: [BLE_SERVICE_UUID]
+                updateBtUI('connecting');
+                logMessage('Запрос выбора устройства LEGO Move Hub...');
+
+                btDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: [LWP_SERVICE_UUID] }]
                 });
 
-                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+                btDevice.addEventListener('gattserverdisconnected', () => {
+                    logMessage('Соединение с Move Hub разорвано.', 'warn');
+                    btCharacteristic = null;
+                    updateBtUI('disconnected');
+                });
 
-                const server = await bluetoothDevice.gatt.connect();
-                const service = await server.getPrimaryService(BLE_SERVICE_UUID);
-                bleCharacteristic = await service.getCharacteristic(BLE_CHAR_UUID);
+                logMessage(`Подключение к GATT серверу (${btDevice.name || 'Move Hub'})...`);
+                btServer = await btDevice.gatt.connect();
 
-                setBleState('connected');
-                showModal('Подключено', 'Успешно установлено соединение с LEGO Boost Hub!', 'success');
+                const service = await btServer.getPrimaryService(LWP_SERVICE_UUID);
+                btCharacteristic = await service.getCharacteristic(LWP_CHAR_UUID);
+
+                // Подписка на уведомления от хаба (заряд батареи, ответы портов)
+                await btCharacteristic.startNotifications();
+                btCharacteristic.addEventListener('characteristicvaluechanged', handleHubNotification);
+
+                // Автоматически выключаем демо-режим при реальном подключении
+                isDemoMode = false;
+                document.getElementById('demoModeToggle').checked = false;
+
+                updateBtUI('connected');
+                logMessage('Успешно подключено к LEGO Move Hub!', 'success');
+                showToast('LEGO Move Hub успешно подключен!');
+
             } catch (error) {
-                console.error('BLE Error:', error);
-                setBleState('disconnected');
-                showModal('Ошибка подключения', 'Не удалось подключиться к хабу. Убедитесь, что он включен.', 'error');
+                logMessage(`Ошибка подключения BT: ${error.message}`, 'error');
+                updateBtUI('disconnected');
+                if (error.name !== 'NotFoundError') {
+                    showToast(`Ошибка Bluetooth: ${error.message}`);
+                }
             }
         }
 
-        function disconnectBluetooth() {
-            if (bluetoothDevice && bluetoothDevice.gatt.connected) {
-                bluetoothDevice.gatt.disconnect();
+        /**
+         * ОБРАБОТКА ВХОДЯЩИХ СООБЩЕНИЙ ОТ ХАБА
+         */
+        function handleHubNotification(event) {
+            const data = new Uint8Array(event.target.value.buffer);
+            const hex = Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' ');
+            // Логируем только важные сообщения, чтобы не засорять консоль
+            if (data[2] === 0x01 && data[3] === 0x06) {
+                // Значение напряжения / батареи
+                const batteryPct = data[5];
+                const batEl = document.getElementById('batteryInfo');
+                batEl.textContent = `Батарея: ${batteryPct}%`;
+                batEl.classList.remove('hidden');
             }
-            onDisconnected();
         }
 
-        function onDisconnected() {
-            setBleState('disconnected');
-            bluetoothDevice = null;
-            bleCharacteristic = null;
-        }
+        /**
+         * ОТПРАВКА БАЙТОВОГО ПАКЕТА LWP 3.0 В ХАБ
+         */
+        async function sendLwpCommand(bytesArray, description = '') {
+            const packet = new Uint8Array(bytesArray);
+            const hexString = Array.from(packet).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
 
-        function setBleState(state) {
-            connectionState = state;
-            const btn = document.getElementById('bleToggleBtn');
-            const icon = document.getElementById('bleIcon');
-            const text = document.getElementById('bleText');
-
-            btn.className = 'w-12 h-12 rounded-xl flex flex-col items-center justify-center transition-all shadow-md cursor-pointer border ';
-
-            if (state === 'connected') {
-                btn.classList.add('bg-emerald-500', 'hover:bg-emerald-400', 'border-emerald-300');
-                icon.className = 'fa-brands fa-bluetooth-b text-xl text-slate-950';
-                text.textContent = 'On';
-                text.className = 'text-[9px] font-bold mt-0.5 text-slate-950';
-            } else if (state === 'connecting') {
-                btn.classList.add('bg-blue-600', 'border-blue-400', 'blinking-blue');
-                icon.className = 'fa-brands fa-bluetooth-b text-xl text-white';
-                text.textContent = 'Sync';
-                text.className = 'text-[9px] font-semibold mt-0.5 text-white';
+            if (btState === 'connected' && btCharacteristic) {
+                try {
+                    await btCharacteristic.writeValueWithoutResponse(packet);
+                    logMessage(`TX [${description}]: ${hexString}`, 'tx');
+                } catch (err) {
+                    logMessage(`Ошибка отправки [${description}]: ${err.message}`, 'error');
+                }
+            } else if (isDemoMode) {
+                logMessage(`DEMO TX [${description}]: ${hexString}`, 'demo');
             } else {
-                btn.classList.add('bg-orange-600', 'hover:bg-orange-500', 'border-orange-400');
-                icon.className = 'fa-brands fa-bluetooth-b text-xl text-white';
-                text.textContent = 'Off';
-                text.className = 'text-[9px] font-semibold mt-0.5 text-white';
+                showToast('Сначала подключите хаб по Bluetooth или включите Демо-режим!');
+                logMessage(`Отклонено (нет соединения): ${description}`, 'warn');
             }
         }
 
-        async function sendCommand(commandBytes) {
-            if (!bleCharacteristic || connectionState !== 'connected') {
-                console.warn('BLE not connected. Command simulated:', commandBytes);
+        /**
+         * ЭКСТРЕННАЯ ОСТАНОВКА ВСЕХ МОТОРОВ (КРАСНЫЙ ВОСЬМИУГОЛЬНИК STOP)
+         */
+        async function emergencyStop() {
+            abortSequenceFlag = true;
+            const statusText = document.getElementById('statusText');
+            const statusDot = document.getElementById('statusDot');
+            
+            statusText.textContent = 'ЭКСТРЕННАЯ ОСТАНОВКА!';
+            statusDot.className = 'inline-block w-2 h-2 rounded-full bg-red-500 animate-ping';
+            
+            logMessage('!!! ЭКСТРЕННАЯ ОСТАНОВКА (STOP) !!!', 'error');
+            showToast('🛑 ЭКСТРЕННАЯ ОСТАНОВКА ВСЕХ МОТОРОВ');
+
+            // Команда LWP 3.0: Port Output Command (0x81), Port, Startup/Completion (0x11), Subcommand StartPower (0x51), Power = 0x00
+            const ports = [PORT_A, PORT_B, PORT_C, PORT_D];
+            for (const port of ports) {
+                const stopCmd = [0x08, 0x00, 0x81, port, 0x11, 0x51, 0x00, 0x00];
+                await sendLwpCommand(stopCmd, `STOP Порт 0x0${port}`);
+            }
+
+            setTimeout(() => {
+                if (btState === 'connected') updateBtUI('connected');
+                else updateBtUI('disconnected');
+            }, 2000);
+        }
+
+        /**
+         * ВРАЩЕНИЕ МОТОРА НА ЗАДАННЫЙ УГОЛ (StartSpeedForDegrees - LWP 3.0)
+         * @param {number} port - ID порта (0x00, 0x01, 0x02)
+         * @param {number} degrees - Угол в градусах (может быть отрицательным)
+         */
+        async function rotateMotor(port, degrees) {
+            if (degrees === 0) return;
+
+            const speedVal = parseInt(document.getElementById('motorSpeedSlider').value, 10) || 45;
+            const absDegrees = Math.abs(Math.round(degrees));
+            // Направление задается знаком скорости (int8)
+            const signedSpeed = degrees > 0 ? speedVal : -speedVal;
+            const speedByte = signedSpeed & 0xFF;
+            const maxPower = 100;
+            const endState = 0x7F; // 127 = Hold (удержание позиции тормозом)
+            const useProfile = 0x00;
+
+            // 32-битное целое (Little Endian) для градусов
+            const degB0 = absDegrees & 0xFF;
+            const degB1 = (absDegrees >> 8) & 0xFF;
+            const degB2 = (absDegrees >> 16) & 0xFF;
+            const degB3 = (absDegrees >> 24) & 0xFF;
+
+            // Формат LWP 3.0: [Length=0x0E, HubID=0x00, MsgType=0x81, Port, Startup=0x11, SubCmd=0x0B (StartSpeedForDegrees), deg(4 bytes), speed, maxPower, endState, useProfile]
+            const cmd = [
+                0x0E, 0x00, 0x81, port, 0x11, 0x0B,
+                degB0, degB1, degB2, degB3,
+                speedByte, maxPower, endState, useProfile
+            ];
+
+            // Обновляем счетчик угла на экране
+            motorAngles[port] = (motorAngles[port] || 0) + degrees;
+            updateMotorPositionUI(port);
+
+            const portNames = { [PORT_A]: 'Мотор A (Толкатель)', [PORT_B]: 'Мотор B (Клешня)', [PORT_C]: 'Мотор C (Площадка)' };
+            await sendLwpCommand(cmd, `${portNames[port]} ${degrees > 0 ? '+' : ''}${degrees}°`);
+        }
+
+        /**
+         * ПОВОРОТ ПЛОЩАДКИ С УЧЕТОМ ПЕРЕДАТОЧНОГО ЧИСЛА РЕДУКТОРА
+         */
+        async function rotateTurntable(tableDegrees) {
+            const ratio = parseFloat(document.getElementById('gearRatioSelect').value) || 1;
+            const motorDegrees = Math.round(tableDegrees * ratio);
+            await rotateMotor(PORT_C, motorDegrees);
+        }
+
+        /**
+         * ТЕСТОВЫЙ ЦИКЛ ПЕРЕВОРОТА КУБИКА (МОТОР А ВПЕРЕД -> ПАУЗА -> НАЗАД)
+         */
+        async function flipSequenceTest() {
+            abortSequenceFlag = false;
+            logMessage('Запуск тестового цикла переворота (Порт A)...');
+            await rotateMotor(PORT_A, 90);
+            await sleep(750);
+            if (abortSequenceFlag) return;
+            await rotateMotor(PORT_A, -90);
+            logMessage('Цикл переворота завершен.');
+        }
+
+        function updateMotorPositionUI(port) {
+            const mapId = { [PORT_A]: 'posMotorA', [PORT_B]: 'posMotorB', [PORT_C]: 'posMotorC' };
+            const el = document.getElementById(mapId[port]);
+            if (el) el.textContent = `${motorAngles[port]}°`;
+        }
+
+        /**
+         * РАБОТА С КАМЕРОЙ И ВСПЫШКОЙ (TORCH)
+         */
+        async function toggleCamera() {
+            if (mediaStream) {
+                stopCamera();
+            } else {
+                await startCamera();
+            }
+        }
+
+        async function startCamera() {
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    showToast('Камера недоступна в этом браузере или без HTTPS.');
+                    return;
+                }
+
+                // Запрашиваем тыловую камеру с автофокусом
+                const constraints = {
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 720 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                };
+
+                mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+                const videoEl = document.getElementById('cameraVideo');
+                videoEl.srcObject = mediaStream;
+                videoEl.classList.remove('hidden');
+                document.getElementById('cameraPlaceholder').classList.add('hidden');
+
+                videoTrack = mediaStream.getVideoTracks()[0];
+
+                document.getElementById('cameraStatusBadge').textContent = 'Камера: ВКЛ';
+                document.getElementById('cameraStatusBadge').classList.replace('text-slate-400', 'text-emerald-400');
+                document.getElementById('btnCameraText').textContent = 'Камера ВЫКЛ';
+
+                logMessage('Тыловая камера запущена.');
+
+                // Запускаем предпросмотр цветов в реальном времени поверх сетки
+                startLiveColorSampling();
+
+            } catch (err) {
+                logMessage(`Ошибка доступа к камере: ${err.message}`, 'error');
+                showToast('Не удалось включить камеру. Проверьте разрешения.');
+            }
+        }
+
+        function stopCamera() {
+            if (liveScanInterval) {
+                clearInterval(liveScanInterval);
+                liveScanInterval = null;
+            }
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+                videoTrack = null;
+            }
+            isTorchOn = false;
+            updateTorchUI();
+
+            const videoEl = document.getElementById('cameraVideo');
+            videoEl.srcObject = null;
+            videoEl.classList.add('hidden');
+            document.getElementById('cameraPlaceholder').classList.remove('hidden');
+
+            document.getElementById('cameraStatusBadge').textContent = 'Камера: выкл';
+            document.getElementById('cameraStatusBadge').classList.replace('text-emerald-400', 'text-slate-400');
+            document.getElementById('btnCameraText').textContent = 'Камера ВКЛ';
+            logMessage('Камера остановлена.');
+        }
+
+        /**
+         * УПРАВЛЕНИЕ ВСПЫШКОЙ (ПОДСВЕТКА КУБИКА)
+         */
+        async function toggleTorch() {
+            if (!videoTrack) {
+                showToast('Сначала включите камеру для использования вспышки.');
                 return;
             }
+
             try {
-                await bleCharacteristic.writeValue(new Uint8Array(commandBytes));
+                const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+                if (!capabilities.torch) {
+                    showToast('Ваше устройство или браузер не поддерживает управление вспышкой из веб-приложения.');
+                    logMessage('Вспышка (torch) не поддерживается данным устройством.', 'warn');
+                    return;
+                }
+
+                isTorchOn = !isTorchOn;
+                await videoTrack.applyConstraints({
+                    advanced: [{ torch: isTorchOn }]
+                });
+
+                updateTorchUI();
+                logMessage(`Вспышка камеры: ${isTorchOn ? 'ВКЛЮЧЕНА' : 'ВЫКЛЮЧЕНА'}`);
             } catch (err) {
-                console.error('Failed to send BLE command:', err);
+                isTorchOn = false;
+                updateTorchUI();
+                logMessage(`Ошибка переключения вспышки: ${err.message}`, 'error');
+                showToast('Не удалось включить вспышку.');
             }
         }
 
-        async function emergencyStop() {
-            // Standard stop command bytes for LEGO Boost / Move Hub
-            await sendCommand([0x08, 0x00, 0x81, 0x01, 0x11, 0x51, 0x00]);
-            showModal('Аварийный Стоп', 'Сигнал остановки отправлен на робота!', 'warning');
-        }
-
-        // --- Camera & Vision Logic ---
-        async function toggleCameraFeed() {
-            const video = document.getElementById('webcamVideo');
-            const placeholder = document.getElementById('camPlaceholder');
-            const btn = document.getElementById('camToggleBtn');
-
-            if (isCameraActive) {
-                if (videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
-                }
-                video.srcObject = null;
-                placeholder.classList.remove('hidden');
-                btn.textContent = 'Включить';
-                btn.className = 'text-xs bg-emerald-600 hover:bg-emerald-500 px-2.5 py-1 rounded-lg font-medium transition';
-                isCameraActive = false;
+        function updateTorchUI() {
+            const btn = document.getElementById('btnTorch');
+            const text = document.getElementById('torchText');
+            if (isTorchOn) {
+                btn.classList.remove('bg-slate-800', 'text-slate-100');
+                btn.classList.add('bg-amber-500', 'text-slate-950');
+                text.textContent = 'Вспышка: ВКЛ';
             } else {
-                try {
-                    videoStream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: currentFacingMode, width: { ideal: 640 }, height: { ideal: 480 } },
-                        audio: false
+                btn.classList.add('bg-slate-800', 'text-slate-100');
+                btn.classList.remove('bg-amber-500', 'text-slate-950');
+                text.textContent = 'Вспышка: ВЫКЛ';
+            }
+        }
+
+        /**
+         * СЕТКА 3x3 И РАСПОЗНАВАНИЕ ЦВЕТОВ С КАМЕРЫ
+         */
+        function initOverlayGrid() {
+            const container = document.querySelector('#gridOverlay > div');
+            container.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.id = `overlayCell_${i}`;
+                cell.className = 'border-2 border-white/70 rounded-lg flex items-center justify-center relative transition-colors';
+                cell.innerHTML = `
+                    <span id="overlayDot_${i}" class="w-4 h-4 rounded-full border border-black/50 shadow-sm bg-white/30"></span>
+                `;
+                container.appendChild(cell);
+            }
+        }
+
+        function startLiveColorSampling() {
+            if (liveScanInterval) clearInterval(liveScanInterval);
+            liveScanInterval = setInterval(() => {
+                if (!mediaStream) return;
+                const colors = sampleNineZones();
+                if (colors) {
+                    colors.forEach((c, idx) => {
+                        const dot = document.getElementById(`overlayDot_${idx}`);
+                        if (dot) dot.style.backgroundColor = c.hex;
                     });
-                    video.srcObject = videoStream;
-                    placeholder.classList.add('hidden');
-                    btn.textContent = 'Выключить';
-                    btn.className = 'text-xs bg-red-600 hover:bg-red-500 px-2.5 py-1 rounded-lg font-medium transition';
-                    isCameraActive = true;
-                    startColorSamplingLoop();
-                } catch (err) {
-                    console.error('Camera error:', err);
-                    showModal('Ошибка камеры', 'Не удалось получить доступ к камере устройства.', 'error');
                 }
-            }
+            }, 250);
         }
 
-        async function switchCamera() {
-            currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
-            if (isCameraActive) {
-                await toggleCameraFeed();
-                await toggleCameraFeed();
-            }
-        }
+        /**
+         * СЭМПЛИРОВАНИЕ 9 ЗОН ИЗ ВИДЕОПОТОКА ЧЕРЕЗ СКРЫТЫЙ CANVAS
+         */
+        function sampleNineZones() {
+            const video = document.getElementById('cameraVideo');
+            if (!video || video.readyState < 2) return null;
 
-        function startColorSamplingLoop() {
-            const video = document.getElementById('webcamVideo');
-            const canvas = document.getElementById('visionCanvas');
-            const ctx = canvas.getContext('2d');
+            const canvas = document.getElementById('samplingCanvas');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-            function sampleColors() {
-                if (!isCameraActive) return;
-                
-                if (video.videoWidth > 0 && video.videoHeight > 0) {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const size = 300;
+            canvas.width = size;
+            canvas.height = size;
 
-                    // Sample 9 grid locations relative to canvas size
-                    const startX = canvas.width * 0.25;
-                    const startY = canvas.height * 0.25;
-                    const stepX = (canvas.width * 0.5) / 3;
-                    const stepY = (canvas.height * 0.5) / 3;
+            // Вырезаем центральный квадрат из видеопотока
+            const vw = video.videoWidth;
+            const vh = video.videoHeight;
+            const minSide = Math.min(vw, vh);
+            const sx = (vw - minSide) / 2;
+            const sy = (vh - minSide) / 2;
 
-                    const sampleCells = document.querySelectorAll('.sample-cell');
-                    const colorsList = [];
+            ctx.drawImage(video, sx, sy, minSide, minSide, 0, 0, size, size);
 
-                    let idx = 0;
-                    for (let r = 0; r < 3; r++) {
-                        for (let c = 0; c < 3; c++) {
-                            const px = Math.floor(startX + c * stepX + stepX / 2);
-                            const py = Math.floor(startY + r * stepY + stepY / 2);
-                            
-                            const pixel = ctx.getImageData(px, py, 1, 1).data;
-                            const rgbColor = `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
-                            const mappedChar = classifyColor(pixel[0], pixel[1], pixel[2]);
+            const detected = [];
+            // Координаты центров 3x3 ячеек (в процентах: 22%, 50%, 78%)
+            const coords = [0.22, 0.50, 0.78];
 
-                            colorsList.push(mappedChar);
-
-                            if (sampleCells[idx]) {
-                                sampleCells[idx].style.backgroundColor = rgbColor;
-                            }
-                            idx++;
-                        }
+            for (let row = 0; row < 3; row++) {
+                for (let col = 0; col < 3; col++) {
+                    const cx = Math.floor(size * coords[col]);
+                    const cy = Math.floor(size * coords[row]);
+                    // Усредняем область 10x10 пикселей вокруг центра ячейки
+                    const imgData = ctx.getImageData(cx - 5, cy - 5, 10, 10).data;
+                    let r = 0, g = 0, b = 0, count = 0;
+                    for (let p = 0; p < imgData.length; p += 4) {
+                        r += imgData[p];
+                        g += imgData[p + 1];
+                        b += imgData[p + 2];
+                        count++;
                     }
-                    updateLivePreviewBars(colorsList);
-                }
-                if (isCameraActive) {
-                    requestAnimationFrame(sampleColors);
+                    r = Math.round(r / count);
+                    g = Math.round(g / count);
+                    b = Math.round(b / count);
+
+                    detected.push(classifyRgbColor(r, g, b));
                 }
             }
-            requestAnimationFrame(sampleColors);
+            return detected;
         }
 
-        function classifyColor(r, g, b) {
-            // Simple heuristic RGB classifier for Rubik's cube standard colors
-            if (r > 200 && g > 200 && b > 200) return 'W'; // White
-            if (r > 200 && g > 180 && b < 100) return 'Y'; // Yellow
-            if (r > 180 && g < 80 && b < 80) return 'R';   // Red
-            if (r > 200 && g > 100 && b < 50) return 'O';  // Orange
-            if (r < 80 && g > 150 && b > 150) return 'G';  // Green
-            if (r < 80 && g < 100 && b > 180) return 'B';  // Blue
-            return 'W';
-        }
+        /**
+         * КЛАССИФИКАЦИЯ RGB В БЛИЖАЙШИЙ ЦВЕТ КУБИКА РУБИКА (HSV + ЕВКЛИДОВО РАССТОЯНИЕ)
+         */
+        function classifyRgbColor(r, g, b) {
+            // Перевод в HSV для надежного отделения белого от цветных наклеек
+            const rNorm = r / 255, gNorm = g / 255, bNorm = b / 255;
+            const max = Math.max(rNorm, gNorm, bNorm);
+            const min = Math.min(rNorm, gNorm, bNorm);
+            const delta = max - min;
 
-        function updateLivePreviewBars(colors) {
-            const previewContainer = document.getElementById('liveColorsPreview');
-            previewContainer.innerHTML = '';
-            const colorMapHex = { W: '#f8fafc', Y: '#eab308', R: '#ef4444', O: '#f97316', G: '#22c55e', B: '#3b82f6' };
-            
-            colors.forEach(c => {
-                const div = document.createElement('div');
-                div.className = 'w-5 h-5 rounded border border-slate-600 shadow-sm';
-                div.style.backgroundColor = colorMapHex[c] || '#64748b';
-                previewContainer.appendChild(div);
-            });
-        }
+            const saturation = max === 0 ? 0 : delta / max;
+            const value = max;
 
-        // --- Scanning Wizard Logic ---
-        const faceKeys = ['F', 'R', 'B', 'L', 'U', 'D'];
+            // Если низкая насыщенность и высокая яркость -> Белый
+            if (saturation < 0.28 && value > 0.45) {
+                return RUBIK_COLORS[0]; // Белый
+            }
 
-        function captureCurrentFace() {
-            // Capture simulated/sampled colors into current face
-            const sampleCells = document.querySelectorAll('.sample-cell');
-            const currentFaceKey = faceKeys[currentScanStep];
-            
-            // Collect simulated colors based on background
-            const sampled = [];
-            sampleCells.forEach(cell => {
-                // Determine color letter from bg color or sample
-                sampled.push(cubeData[currentFaceKey][0]); // placeholder capture
-            });
+            // Вычисляем Hue (оттенок 0..360)
+            let hue = 0;
+            if (delta !== 0) {
+                if (max === rNorm) {
+                    hue = 60 * (((gNorm - bNorm) / delta) % 6);
+                } else if (max === gNorm) {
+                    hue = 60 * (((bNorm - rNorm) / delta) + 2);
+                } else {
+                    hue = 60 * (((rNorm - gNorm) / delta) + 4);
+                }
+            }
+            if (hue < 0) hue += 360;
 
-            // Mark face as scanned in status UI
-            const badge = document.getElementById(`faceStatus${currentScanStep}`);
-            badge.classList.remove('bg-slate-700', 'border-slate-600');
-            badge.classList.add('bg-emerald-600', 'text-white', 'border-emerald-400');
-
-            currentScanStep++;
-            if (currentScanStep >= 6) {
-                currentScanStep = 0;
-                showModal('Сканирование завершено', 'Все 6 граней успешно считаны!', 'success');
+            // Классификация по цветовому кругу Hue
+            if (hue >= 342 || hue < 14) {
+                return RUBIK_COLORS[2]; // Красный
+            } else if (hue >= 14 && hue < 42) {
+                return RUBIK_COLORS[3]; // Оранжевый
+            } else if (hue >= 42 && hue < 78) {
+                return RUBIK_COLORS[1]; // Желтый
+            } else if (hue >= 78 && hue < 168) {
+                return RUBIK_COLORS[5]; // Зеленый
+            } else if (hue >= 168 && hue < 265) {
+                return RUBIK_COLORS[4]; // Синий
             } else {
-                document.getElementById('currentFaceInstruction').innerHTML = `Сканирование стороны: <span class="text-amber-400 uppercase">${faceNames[currentScanStep]}</span>`;
-                document.getElementById('scanStepBadge').textContent = `Шаг ${currentScanStep + 1} из 6`;
+                return RUBIK_COLORS[2]; // Оттенки мадженты/красного -> Красный
             }
-            renderCubeNet();
         }
 
-        async function rotateToNextFaceRobot() {
-            // Send command to rotate cube via Motor B
-            const angle = motorAngles.B;
-            await sendCommand([0x0c, 0x00, 0x81, 0x01, 0x01, 0x11, angle, 0x64, 0x03, 0x00, 0x00, 0x00]);
-            showModal('Поворот робота', `Команда поворота на ${angle}° отправлена роботу.`, 'info');
-        }
-
-        function renderCubeNet() {
-            faceKeys.forEach(key => {
-                const container = document.getElementById(`netFace-${key}`);
-                if (container) {
-                    container.innerHTML = '';
-                    const colorMapHex = { W: '#f8fafc', Y: '#eab308', R: '#ef4444', O: '#f97316', G: '#22c55e', B: '#3b82f6' };
-                    cubeData[key].forEach(c => {
-                        const cell = document.createElement('div');
-                        cell.className = 'w-3 h-3 rounded-[2px] m-[1px]';
-                        cell.style.backgroundColor = colorMapHex[c] || '#64748b';
-                        container.appendChild(cell);
-                    });
+        /**
+         * ЗАХВАТ ГРАНИ ПО НАЖАТИЮ КНОПКИ «СКАНИРОВАТЬ ГРАНЬ»
+         */
+        function scanCubeFace() {
+            if (mediaStream) {
+                const colors = sampleNineZones();
+                if (colors) {
+                    scannedFace = colors;
+                    renderScannedGrid();
+                    const codes = scannedFace.map(c => c.id).join(' ');
+                    logMessage(`Грань отсканирована: [${codes}]`, 'success');
+                    showToast('Грань кубика успешно отсканирована!');
                 }
-            });
-        }
-
-        function resetCubeData() {
-            currentScanStep = 0;
-            document.getElementById('currentFaceInstruction').innerHTML = `Сканирование стороны: <span class="text-amber-400 uppercase">${faceNames[0]}</span>`;
-            document.getElementById('scanStepBadge').textContent = `Шаг 1 из 6`;
-            for (let i = 0; i < 6; i++) {
-                const badge = document.getElementById(`faceStatus${i}`);
-                badge.className = 'h-8 rounded-lg bg-slate-700 flex flex-col items-center justify-center text-[10px] font-bold border border-slate-600';
-            }
-            renderCubeNet();
-            showModal('Сброс', 'Данные кубика сброшены.', 'info');
-        }
-
-        // --- Solver & Calibration Logic ---
-        function startAutoSolve() {
-            showModal('Автосборка', 'Запущен алгоритм решения кубика Рубика. Отправка последовательности шагов...', 'success');
-        }
-
-        function updateMotorAngle(motor, val) {
-            motorAngles[motor] = parseInt(val);
-            document.getElementById(`angle${motor}Val`).textContent = val + '°';
-        }
-
-        async function testMotor(motor) {
-            const angle = motorAngles[motor];
-            const port = motor === 'A' ? 0x00 : 0x01;
-            // LEGO Boost port motor command
-            await sendCommand([0x0c, 0x00, 0x81, 0x01, port, 0x11, angle, 0x64, 0x03, 0x00, 0x00, 0x00]);
-            showModal('Тест мотора', `Мотор ${motor} повернут на ${angle}°`, 'info');
-        }
-
-        // --- Modal Helper Functions ---
-        function showModal(title, text, type = 'info') {
-            document.getElementById('modalTitle').textContent = title;
-            document.getElementById('modalText').textContent = text;
-            const iconDiv = document.getElementById('modalIcon');
-            
-            if (type === 'success') {
-                iconDiv.className = 'text-3xl mb-3 text-emerald-400';
-                iconDiv.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
-            } else if (type === 'warning') {
-                iconDiv.className = 'text-3xl mb-3 text-red-500';
-                iconDiv.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
             } else {
-                iconDiv.className = 'text-3xl mb-3 text-amber-400';
-                iconDiv.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
+                // Если камера не включена, генерируем тестовый паттерн для проверки интерфейса
+                scannedFace = Array.from({ length: 9 }, () => RUBIK_COLORS[Math.floor(Math.random() * RUBIK_COLORS.length)]);
+                renderScannedGrid();
+                logMessage('Камера выключена — сгенерирован тестовый набор цветов.', 'warn');
+                showToast('Камера выключена: показан тестовый шаблон.');
             }
-            document.getElementById('messageModal').classList.remove('hidden');
         }
 
-        function closeModal() {
-            document.getElementById('messageModal').classList.add('hidden');
+        function renderScannedGrid() {
+            const grid = document.getElementById('scannedPreviewGrid');
+            grid.innerHTML = '';
+
+            scannedFace.forEach((colorObj, index) => {
+                const tile = document.createElement('button');
+                tile.type = 'button';
+                tile.style.backgroundColor = colorObj.hex;
+                tile.title = `${colorObj.name} (нажмите для смены)`;
+                tile.className = 'w-full h-full rounded-lg border border-black/40 shadow-inner flex items-center justify-center font-mono font-extrabold text-xs text-slate-950/80 active:scale-90 transition-transform cursor-pointer';
+                tile.textContent = colorObj.id;
+
+                // Ручная смена цвета по нажатию на клетку (если освещение дало сбой)
+                tile.onclick = () => {
+                    const currentIdx = RUBIK_COLORS.findIndex(c => c.id === scannedFace[index].id);
+                    const nextColor = RUBIK_COLORS[(currentIdx + 1) % RUBIK_COLORS.length];
+                    scannedFace[index] = nextColor;
+                    renderScannedGrid();
+                };
+
+                grid.appendChild(tile);
+            });
+
+            const summary = scannedFace.map(c => c.id).join('-');
+            document.getElementById('scannedColorsText').textContent = `Код грани: ${summary}`;
         }
 
-        // Initialize UI on load
-        window.onload = function() {
-            renderCubeNet();
+        function resetScannedGrid() {
+            scannedFace = Array(9).fill(RUBIK_COLORS[0]);
+            renderScannedGrid();
+        }
+
+        /**
+         * ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (ЛОГИ, УВЕДОМЛЕНИЯ, ЗАДЕРЖКА)
+         */
+        function logMessage(msg, type = 'info') {
+            const consoleEl = document.getElementById('logConsole');
+            const line = document.createElement('div');
+            const time = new Date().toLocaleTimeString('ru-RU', { hour12: false });
+
+            const colorMap = {
+                info: 'text-slate-300',
+                tx: 'text-emerald-400',
+                demo: 'text-indigo-400',
+                success: 'text-green-400 font-semibold',
+                warn: 'text-amber-400',
+                error: 'text-red-400 font-semibold'
+            };
+
+            line.className = colorMap[type] || 'text-slate-300';
+            line.textContent = `[${time}] ${msg}`;
+            consoleEl.appendChild(line);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('logConsole').innerHTML = '';
+        }
+
+        let toastTimer = null;
+        function showToast(text) {
+            const banner = document.getElementById('toastBanner');
+            document.getElementById('toastMessage').textContent = text;
+            banner.classList.remove('hidden');
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(hideToast, 3500);
+        }
+
+        function hideToast() {
+            document.getElementById('toastBanner').classList.add('hidden');
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
         }
     </script>
 </body>
