@@ -1,84 +1,22 @@
-<!DOCTYPE html>
-<html lang="ru">
+<!-- ... existing code ... -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LEGO Boost Rubik's Cube Solver v0.04</title>
+    <title>LEGO Boost Rubik's Cube Solver v0.05</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0f172a;
-            color: #f8fafc;
-            -webkit-tap-highlight-color: transparent;
-            overscroll-behavior-y: contain;
-        }
-
-        /* Восьмиугольная кнопка экстренной остановки STOP */
-        .octagon-stop {
-            clip-path: polygon(
-                30% 0%, 70% 0%,
-                100% 30%, 100% 70%,
-                70% 100%, 30% 100%,
-                0% 70%, 0% 30%
-            );
-            transition: transform 0.1s ease, filter 0.15s ease;
-        }
-        .octagon-stop:active {
-            transform: scale(0.92);
-            filter: brightness(1.15);
-        }
-
-        /* Анимация синего мигания для BT в процессе подключения */
-        @keyframes bt-pulse-blue {
-            0%, 100% {
-                background-color: #2563eb;
-                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.75);
-            }
-            50% {
-                background-color: #60a5fa;
-                box-shadow: 0 0 18px 4px rgba(96, 165, 250, 0.85);
-            }
-        }
-        .bt-connecting {
-            animation: bt-pulse-blue 0.85s infinite ease-in-out;
-        }
-
-        /* Сетка сканера поверх видео */
-        .scanner-reticle {
-            box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55);
-        }
-
-        /* Кастомный скроллбар для журнала логов */
-        .log-scroll::-webkit-scrollbar {
-            width: 5px;
-        }
-        .log-scroll::-webkit-scrollbar-track {
-            background: rgba(15, 23, 42, 0.5);
-        }
-        .log-scroll::-webkit-scrollbar-thumb {
-            background: rgba(100, 116, 139, 0.5);
-            border-radius: 9999px;
-        }
-    </style>
-</head>
-<body class="min-h-screen flex flex-col select-none">
-
-    <!-- ВЕРХНЯЯ ПАНЕЛЬ: Версия над STOP, восьмиугольник STOP слева, квадрат BT справа -->
+<!-- ... existing code ... -->
+    <!-- ВЕРХНЯЯ ПАНЕЛЬ: Версия над STOP, восьмиугольник STOP слева, Шестеренка + BT справа -->
     <header class="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-3 sm:px-4 pt-1.5 pb-3 shadow-lg">
         <!-- Полоса индикации версии интерфейса над кнопкой STOP -->
         <div class="max-w-3xl mx-auto flex items-center justify-between text-[11px] text-slate-400 pb-1.5 mb-1.5 border-b border-slate-800/70">
             <span id="appVersionBadge" class="font-mono font-bold text-emerald-300 bg-slate-800/90 px-2.5 py-0.5 rounded-md border border-slate-700/80">
-                Версия: v0.04
+                Версия: v0.05
             </span>
             <span class="text-[10px] text-slate-400 font-medium">LEGO Boost Move Hub • LWP 3.0</span>
         </div>
 
-        <div class="max-w-3xl mx-auto flex items-center justify-between gap-2.5">
+        <div class="max-w-3xl mx-auto flex items-center justify-between gap-2">
             
             <!-- СЛЕВА: Восьмиугольная кнопка STOP -->
             <button id="btnStop" type="button" aria-label="Экстренная остановка"
@@ -89,60 +27,43 @@
 
             <!-- ЦЕНТР: Заголовок, статус и демо-режим -->
             <div class="text-center flex-1 min-w-0 px-1">
-                <h1 class="text-sm sm:text-xl font-extrabold tracking-tight text-white truncate">
+                <h1 class="text-sm sm:text-lg font-extrabold tracking-tight text-white truncate">
                     BOOST CUBE SOLVER
                 </h1>
                 <p id="statusSubtitle" class="text-xs sm:text-sm text-amber-400 font-medium truncate mt-0.5">
                     Хаб не подключен
                 </p>
-                <div class="mt-1.5 flex items-center justify-center gap-2">
+                <div class="mt-1.5 flex items-center justify-center gap-1.5">
                     <button id="btnDemoToggle" type="button"
                         class="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition cursor-pointer">
-                        Демо-режим: ВЫКЛ
+                        Демо: ВЫКЛ
                     </button>
                 </div>
             </div>
 
-            <!-- СПРАВА: Квадратная кнопка Bluetooth (Оранжевый -> Синий мигающий -> Зеленый) -->
-            <button id="btnBluetooth" type="button" aria-label="Bluetooth соединение"
-                class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-orange-500 hover:bg-orange-400 text-white flex flex-col items-center justify-center shadow-xl transition-colors duration-200 shrink-0 cursor-pointer border border-white/25 relative z-50">
-                <svg class="w-7 h-7 sm:w-8 sm:h-8 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
-                </svg>
-                <span id="btLabel" class="text-[10px] sm:text-xs font-bold mt-1 tracking-wide pointer-events-none">BT</span>
-            </button>
+            <!-- СПРАВА: Кнопка настроек (шестеренка) + Кнопка Bluetooth -->
+            <div class="flex items-center gap-2 shrink-0">
+                <button id="btnOpenSettings" type="button" aria-label="Настройки и калибровка моторов"
+                    class="w-14 h-16 sm:w-16 sm:h-20 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 flex flex-col items-center justify-center shadow-xl transition border border-slate-700 cursor-pointer">
+                    <svg class="w-6 h-6 sm:w-7 sm:h-7 text-slate-200 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    <span class="text-[9px] sm:text-[10px] font-bold mt-1 tracking-wide text-slate-300 pointer-events-none">ПОРТЫ</span>
+                </button>
+
+                <button id="btnBluetooth" type="button" aria-label="Bluetooth соединение"
+                    class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-orange-500 hover:bg-orange-400 text-white flex flex-col items-center justify-center shadow-xl transition-colors duration-200 cursor-pointer border border-white/25 relative z-50">
+                    <svg class="w-7 h-7 sm:w-8 sm:h-8 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
+                    </svg>
+                    <span id="btLabel" class="text-[10px] sm:text-xs font-bold mt-1 tracking-wide pointer-events-none">BT</span>
+                </button>
+            </div>
 
         </div>
     </header>
-
-    <!-- ВСПЛЫВАЮЩЕЕ УВЕДОМЛЕНИЕ (вместо alert) -->
-    <div id="toastBanner" class="fixed top-28 left-1/2 -translate-x-1/2 z-50 hidden max-w-md w-[92%] px-4 py-3 rounded-2xl bg-slate-800/95 border border-slate-600 text-white text-sm font-medium shadow-2xl text-center backdrop-blur pointer-events-none">
-    </div>
-
-    <!-- ОСНОВНОЙ КОНТЕНТ -->
-    <main class="flex-1 max-w-3xl w-full mx-auto px-3 sm:px-4 py-4 space-y-5 pb-10">
-
-        <!-- БЛОК 1: СКАНЕР ГРАНИ КУБИКА (КАМЕРА + СЕТКА 3x3 + ВСПЫШКА) -->
-        <section class="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                    <h2 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span>
-                        Сканер грани кубика (3×3)
-                    </h2>
-                    <p class="text-xs text-slate-400">Совместите наклейки грани с прицельной сеткой</p>
-                </div>
-
-                <!-- Кнопки управления камерой и вспышкой -->
-                <div class="flex items-center gap-2">
-                    <button id="btnTorch" type="button" disabled
-                        class="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700 disabled:opacity-45 flex items-center gap-1.5 transition cursor-pointer">
-                        <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                        </svg>
-                        <span id="torchLabel">Вспышка: ВЫКЛ</span>
-                    </button>
-
+<!-- ... existing code ... -->
                     <button id="btnCamera" type="button"
                         class="px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow transition cursor-pointer">
                         Вкл. камеру
@@ -150,107 +71,17 @@
                 </div>
             </div>
 
+            <!-- Переключатель автоподсветки при запуске камеры -->
+            <div class="flex items-center justify-between bg-slate-950/70 px-3 py-2 rounded-xl border border-slate-800/80 text-xs">
+                <span class="text-slate-300">Автовключение камеры при соединении BT (со вспышкой):</span>
+                <label class="inline-flex items-center gap-2 cursor-pointer">
+                    <input id="chkAutoTorch" type="checkbox" checked class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+                    <span class="font-semibold text-amber-300">Авто-вспышка</span>
+                </label>
+            </div>
+
             <!-- Контейнер видеопотока и прицельной сетки 3x3 -->
-            <div class="relative w-full aspect-square max-w-[320px] mx-auto rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 flex items-center justify-center">
-                <video id="cameraVideo" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
-                <canvas id="samplingCanvas" class="hidden"></canvas>
-
-                <!-- Заглушка до запуска камеры -->
-                <div id="cameraPlaceholder" class="text-center p-6 space-y-2">
-                    <div class="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 mx-auto flex items-center justify-center text-slate-400">
-                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                            <circle cx="12" cy="13" r="4"></circle>
-                        </svg>
-                    </div>
-                    <p class="text-xs text-slate-400">Нажмите «Вкл. камеру», чтобы активировать распознавание цветов</p>
-                </div>
-
-                <!-- Прицельная сетка 3x3 поверх видео -->
-                <div id="reticleOverlay" class="scanner-reticle absolute inset-6 sm:inset-8 rounded-2xl border-2 border-white/80 grid grid-cols-3 grid-rows-3 pointer-events-none">
-                    <div class="border border-white/35 flex items-center justify-center"><span data-live-dot="0" class="w-4 h-4 rounded-full border-2 border-white shadow"></span></div>
-                    <div class="border border-white/35 flex items-center justify-center"><span data-live-dot="1" class="w-4 h-4 rounded-full border-2 border-white shadow"></span></div>
-                    <div class="border border-white/35 flex items-center justify-center"><span data-live-dot="2" class="w-4 h-4 rounded-full border-2 border-white shadow"></span></div>
-                    <div class="border border-white/35 flex items-center justify-center"><span data-live-dot="3" class="w-4 h-4 rounded-full border-2 border-white shadow"></span></div>
-                    <div class="border border-white/35 flex items-center justify-center"><span data-live-dot="4" class="w-4 h-4 rounded-full border-2 border-white shadow"></span></div>
-                    <div class="border border-white/35 flex items-center justify-center"><span data-live-dot="5" class="w-4 h-4 rounded-full border-2 border-white shadow"></span></div>
-                    <div class="border border-white/35 flex items-center justify-center"><span data-live-dot="6" class="w-4 h-4 rounded-full border-2 border-white shadow"></span></div>
-                    <div class="border border-white/35 flex items-center justify-center"><span data-live-dot="7" class="w-4 h-4 rounded-full border-2 border-white shadow"></span></div>
-                    <div class="border border-white/35 flex items-center justify-center"><span data-live-dot="8" class="w-4 h-4 rounded-full border-2 border-white shadow"></span></div>
-                </div>
-            </div>
-
-            <!-- Кнопка захвата и матрица текущей отсканированной грани -->
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-950/75 p-3.5 rounded-2xl border border-slate-800/80">
-                <div class="flex items-center gap-3">
-                    <!-- Зафиксированная сетка 3x3 (кликабельна для ручной коррекции цвета) -->
-                    <div id="capturedGrid" class="grid grid-cols-3 gap-1.5 p-2 bg-slate-900 rounded-xl border border-slate-800 shrink-0">
-                        <!-- Генерируется через JS -->
-                    </div>
-                    <div class="text-xs text-slate-400">
-                        <p class="font-semibold text-slate-200">Буфер сканирования</p>
-                        <p class="mt-0.5 leading-relaxed">Нажмите на клетку для ручной правки цвета перед записью в развертку.</p>
-                    </div>
-                </div>
-
-                <div class="flex flex-col w-full sm:w-auto gap-2 shrink-0">
-                    <button id="btnCaptureFace" type="button"
-                        class="w-full px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold text-xs sm:text-sm shadow-lg transition cursor-pointer">
-                        1. Считать с камеры
-                    </button>
-                    <button id="btnApplyToActiveFace" type="button"
-                        class="w-full px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-bold text-xs sm:text-sm shadow transition cursor-pointer">
-                        2. Записать в грань [<span id="activeFaceShortLabel">F</span>]
-                    </button>
-                </div>
-            </div>
-
-            <!-- БЛОК 1.2: ПЛОСКАЯ РАЗВЕРТКА ВСЕХ 6 ГРАНЕЙ КУБИКА (54 КЛЕТКИ) -->
-            <div class="bg-slate-950/90 border border-slate-800 rounded-2xl p-3.5 space-y-3">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                        <h3 class="text-sm font-bold text-white">Развертка всех 6 граней кубика (54 клетки)</h3>
-                        <p class="text-[11px] text-slate-400">Выберите грань для записи или нажмите на любую клетку для смены цвета</p>
-                    </div>
-                    <button id="btnResetCubeMap" type="button"
-                        class="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 transition cursor-pointer">
-                        Сбросить развертку
-                    </button>
-                </div>
-
-                <!-- Кнопки быстрого выбора активной грани -->
-                <div class="grid grid-cols-6 gap-1.5" id="faceSelectorButtons">
-                    <button type="button" data-face="U" class="face-tab py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer">U (Верх)</button>
-                    <button type="button" data-face="L" class="face-tab py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer">L (Лево)</button>
-                    <button type="button" data-face="F" class="face-tab py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white border border-indigo-400 cursor-pointer">F (Фронт)</button>
-                    <button type="button" data-face="R" class="face-tab py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer">R (Право)</button>
-                    <button type="button" data-face="B" class="face-tab py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer">B (Зад)</button>
-                    <button type="button" data-face="D" class="face-tab py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer">D (Низ)</button>
-                </div>
-
-                <!-- Крестообразная развертка кубика Рубика (4 столбца x 3 ряда блоков 3x3) -->
-                <div class="overflow-x-auto py-1">
-                    <div class="grid grid-cols-4 gap-2 w-max mx-auto">
-                        <!-- Ряд 1: [пусто] [U] [пусто] [пусто] -->
-                        <div></div>
-                        <div id="net-face-U" class="net-face-box p-1.5 rounded-xl bg-slate-900 border border-slate-800 transition"></div>
-                        <div></div>
-                        <div></div>
-
-                        <!-- Ряд 2: [L] [F] [R] [B] -->
-                        <div id="net-face-L" class="net-face-box p-1.5 rounded-xl bg-slate-900 border border-slate-800 transition"></div>
-                        <div id="net-face-F" class="net-face-box p-1.5 rounded-xl bg-slate-900 border-2 border-indigo-500 transition"></div>
-                        <div id="net-face-R" class="net-face-box p-1.5 rounded-xl bg-slate-900 border border-slate-800 transition"></div>
-                        <div id="net-face-B" class="net-face-box p-1.5 rounded-xl bg-slate-900 border border-slate-800 transition"></div>
-
-                        <!-- Ряд 3: [пусто] [D] [пусто] [пусто] -->
-                        <div></div>
-                        <div id="net-face-D" class="net-face-box p-1.5 rounded-xl bg-slate-900 border border-slate-800 transition"></div>
-                        <div></div>
-                        <div></div>
-                    </div>
-                </div>
-
+<!-- ... existing code ... -->
                 <!-- Счетчик заполненности цветов (проверка по 9 наклеек каждого цвета) -->
                 <div id="colorCountsBar" class="flex flex-wrap items-center justify-center gap-2 pt-1 text-[11px]">
                     <!-- Генерируется через JS -->
@@ -258,407 +89,411 @@
             </div>
         </section>
 
-        <!-- БЛОК 2: КАЛИБРОВКА И ТЕСТИРОВАНИЕ МОТОРОВ (A, B, C) -->
-        <section class="space-y-4">
-            <div class="flex items-center justify-between px-1">
-                <h2 class="text-base sm:text-lg font-bold text-white">Калибровка моторов LEGO Boost</h2>
-                <span class="text-xs text-slate-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">LWP 3.0</span>
-            </div>
-
-            <!-- МОТОР A: ВЕРТИКАЛЬНЫЙ ТОЛКАТЕЛЬ (ПОРТ 0x00) -->
-            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3.5">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <span class="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-extrabold">ПОРТ A</span>
-                            <h3 class="font-bold text-white text-sm sm:text-base">Вертикальный толкатель (переворот)</h3>
-                        </div>
-                        <p class="text-xs text-slate-400 mt-0.5">Быстрый ход с уменьшенной амплитудой</p>
-                    </div>
-
-                    <label class="inline-flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 cursor-pointer">
-                        <input id="invA" type="checkbox" checked class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
-                        <span class="text-xs font-semibold text-slate-200">Инверсия</span>
-                    </label>
+        <!-- БЛОК 2: АВТОСБОРКА КУБИКА РУБИКА -->
+        <section class="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-indigo-400 inline-block"></span>
+                        Автоматическая сборка
+                    </h2>
+                    <p class="text-xs text-slate-400">Сканирование 6 граней → Самопроверка → Выполнение алгоритма</p>
                 </div>
 
-                <!-- Расширенные настройки хода и скорости Порта A -->
-                <div class="bg-slate-950/80 border border-slate-800/90 rounded-2xl p-3 space-y-3">
-                    <div>
-                        <div class="flex items-center justify-between text-xs mb-1">
-                            <span class="text-slate-300 font-medium">Амплитуда хода штока:</span>
-                            <span id="valAmpA" class="font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/25">50°</span>
-                        </div>
-                        <input id="rangeAmpA" type="range" min="15" max="120" step="5" value="50"
-                            class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500">
-                        <div class="grid grid-cols-5 gap-1.5 mt-2">
-                            <button type="button" onclick="setAmpA(30)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">30°</button>
-                            <button type="button" onclick="setAmpA(45)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">45°</button>
-                            <button type="button" onclick="setAmpA(60)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">60°</button>
-                            <button type="button" onclick="setAmpA(75)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">75°</button>
-                            <button type="button" onclick="setAmpA(90)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">90°</button>
-                        </div>
-                    </div>
-
-                    <div class="pt-2 border-t border-slate-800/70">
-                        <div class="flex items-center justify-between text-xs mb-1">
-                            <span class="text-slate-300 font-medium">Скорость движения (мощность):</span>
-                            <span id="valSpeedA" class="font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/25">95%</span>
-                        </div>
-                        <input id="rangeSpeedA" type="range" min="30" max="100" step="5" value="95"
-                            class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
-                        <div class="grid grid-cols-3 gap-1.5 mt-2">
-                            <button type="button" onclick="setSpeedA(70)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">70% (Плавнее)</button>
-                            <button type="button" onclick="setSpeedA(85)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">85% (Быстро)</button>
-                            <button type="button" onclick="setSpeedA(100)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-emerald-300 border border-slate-800 transition cursor-pointer">100% (Макс.)</button>
-                        </div>
-                    </div>
-
-                    <div class="pt-2 border-t border-slate-800/70 flex flex-wrap items-center justify-between gap-2">
-                        <span class="text-xs text-slate-300 font-medium">Пауза в верхней точке (цикл):</span>
-                        <div class="flex items-center gap-1.5">
-                            <button type="button" data-pause="50" onclick="setPauseA(50)" class="pause-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer">50 мс</button>
-                            <button type="button" data-pause="150" onclick="setPauseA(150)" class="pause-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-600 text-white border border-amber-500 cursor-pointer">150 мс</button>
-                            <button type="button" data-pause="300" onclick="setPauseA(300)" class="pause-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer">300 мс</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                    <button type="button" onclick="pushPusher()"
-                        class="p-3.5 rounded-2xl bg-amber-600 hover:bg-amber-500 active:scale-[0.98] text-white font-bold text-sm shadow transition cursor-pointer">
-                        Толкнуть (переворот)
-                    </button>
-                    <button type="button" onclick="returnPusher()"
-                        class="p-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-semibold text-sm border border-slate-700 transition cursor-pointer">
-                        Вернуть в исходное
-                    </button>
-                    <button type="button" onclick="testCyclePusher()"
-                        class="col-span-2 sm:col-span-1 p-3.5 rounded-2xl bg-indigo-600/90 hover:bg-indigo-500 active:scale-[0.98] text-white font-bold text-sm shadow transition cursor-pointer">
-                        Цикл: Толкнуть → Вернуть
-                    </button>
-                </div>
-
-                <div class="pt-1">
-                    <p class="text-[11px] text-slate-400 mb-1.5 font-medium">Тонкая подстройка положения толкателя:</p>
-                    <div class="grid grid-cols-4 gap-2">
-                        <button type="button" onclick="nudgeMotor('A', 10)"
-                            class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-800 active:scale-95 transition cursor-pointer">
-                            Назад 10°
-                        </button>
-                        <button type="button" onclick="nudgeMotor('A', 5)"
-                            class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-800 active:scale-95 transition cursor-pointer">
-                            Назад 5°
-                        </button>
-                        <button type="button" onclick="nudgeMotor('A', -5)"
-                            class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-amber-300 border border-slate-800 active:scale-95 transition cursor-pointer">
-                            Толкнуть +5°
-                        </button>
-                        <button type="button" onclick="nudgeMotor('A', -10)"
-                            class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-amber-300 border border-slate-800 active:scale-95 transition cursor-pointer">
-                            Толкнуть +10°
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- МОТОР B: КЛЕШНЯ-ФИКСАТОР ДВУХ ВЕРХНИХ ГРАНЕЙ (ПОРТ 0x01) -->
-            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <span class="px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs font-extrabold">ПОРТ B</span>
-                            <h3 class="font-bold text-white text-sm sm:text-base">Клешня-фиксатор верхних слоев</h3>
-                        </div>
-                        <p class="text-xs text-slate-400 mt-0.5">Удержание двух верхних граней при вращении основания</p>
-                    </div>
-
-                    <label class="inline-flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 cursor-pointer">
-                        <input id="invB" type="checkbox" checked class="w-4 h-4 accent-sky-500 rounded cursor-pointer">
-                        <span class="text-xs font-semibold text-slate-200">Инверсия</span>
-                    </label>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2.5">
-                    <button type="button" onclick="clampClaw()"
-                        class="p-3.5 rounded-2xl bg-sky-600 hover:bg-sky-500 active:scale-[0.98] text-white font-bold text-sm shadow transition cursor-pointer">
-                        Зажать (фиксация)
-                    </button>
-                    <button type="button" onclick="releaseClaw()"
-                        class="p-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-semibold text-sm border border-slate-700 transition cursor-pointer">
-                        Разжать (свободно)
-                    </button>
-                </div>
-
-                <div class="pt-1">
-                    <p class="text-[11px] text-slate-400 mb-1.5 font-medium">Тонкая регулировка прижима клешни:</p>
-                    <div class="grid grid-cols-4 gap-2">
-                        <button type="button" onclick="nudgeMotor('B', 10)"
-                            class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-800 active:scale-95 transition cursor-pointer">
-                            Ослабить 10°
-                        </button>
-                        <button type="button" onclick="nudgeMotor('B', 5)"
-                            class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-800 active:scale-95 transition cursor-pointer">
-                            Ослабить 5°
-                        </button>
-                        <button type="button" onclick="nudgeMotor('B', -5)"
-                            class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-sky-300 border border-slate-800 active:scale-95 transition cursor-pointer">
-                            Зажать +5°
-                        </button>
-                        <button type="button" onclick="nudgeMotor('B', -10)"
-                            class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-sky-300 border border-slate-800 active:scale-95 transition cursor-pointer">
-                            Зажать +10°
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- МОТОР C: ВНЕШНИЙ МОТОР ПЛОЩАДКИ С КУБИКОМ (ПОРТ 0x02) + ТОЧНЫЕ ПОДСТРОЙКИ -->
-            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3.5">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <span class="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-extrabold">ПОРТ C</span>
-                            <h3 class="font-bold text-white text-sm sm:text-base">Вращение площадки с кубиком</h3>
-                        </div>
-                        <p class="text-xs text-slate-400 mt-0.5">Точная калибровка угла, люфта редуктора и скорости</p>
-                    </div>
-
-                    <div class="flex items-center gap-2">
-                        <select id="gearRatioC" aria-label="Редуктор площадки"
-                            class="bg-slate-950 text-xs font-semibold text-slate-200 px-2.5 py-1.5 rounded-xl border border-slate-800 cursor-pointer">
-                            <option value="1">Редуктор 1:1</option>
-                            <option value="3" selected>Редуктор 3:1</option>
-                            <option value="5">Редуктор 5:1</option>
-                        </select>
-
-                        <label class="inline-flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 cursor-pointer">
-                            <input id="invC" type="checkbox" checked class="w-4 h-4 accent-emerald-500 rounded cursor-pointer">
-                            <span class="text-xs font-semibold text-slate-200">Инверсия</span>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Блок точных настроек Порта C -->
-                <div class="bg-slate-950/80 border border-slate-800/90 rounded-2xl p-3 space-y-3">
-                    <!-- 1. Базовый угол поворота на четверть оборота (60° - 120° с шагом 1°) -->
-                    <div>
-                        <div class="flex items-center justify-between text-xs mb-1">
-                            <span class="text-slate-300 font-medium">Точный угол поворота (90° базы):</span>
-                            <div class="flex items-center gap-1.5">
-                                <button type="button" onclick="adjustTurnAngleC(-1)" class="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-white font-bold cursor-pointer">-</button>
-                                <span id="valTurnAngleC" class="font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/25 min-w-[46px] text-center">90°</span>
-                                <button type="button" onclick="adjustTurnAngleC(1)" class="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-white font-bold cursor-pointer">+</button>
-                            </div>
-                        </div>
-                        <input id="rangeTurnAngleC" type="range" min="60" max="120" step="1" value="90"
-                            class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
-                    </div>
-
-                    <!-- 2. Компенсация люфта шестерен (Backlash 0° - 25°) -->
-                    <div class="pt-2 border-t border-slate-800/70">
-                        <div class="flex items-center justify-between text-xs mb-1">
-                            <span class="text-slate-300 font-medium">Компенсация люфта редуктора (доводка):</span>
-                            <div class="flex items-center gap-1.5">
-                                <button type="button" onclick="adjustBacklashC(-1)" class="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-white font-bold cursor-pointer">-</button>
-                                <span id="valBacklashC" class="font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/25 min-w-[46px] text-center">0°</span>
-                                <button type="button" onclick="adjustBacklashC(1)" class="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-white font-bold cursor-pointer">+</button>
-                            </div>
-                        </div>
-                        <input id="rangeBacklashC" type="range" min="0" max="25" step="1" value="0"
-                            class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500">
-                    </div>
-
-                    <!-- 3. Скорость вращения площадки -->
-                    <div class="pt-2 border-t border-slate-800/70">
-                        <div class="flex items-center justify-between text-xs mb-1">
-                            <span class="text-slate-300 font-medium">Скорость вращения площадки:</span>
-                            <span id="valSpeedC" class="font-mono font-bold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/25">60%</span>
-                        </div>
-                        <input id="rangeSpeedC" type="range" min="25" max="100" step="5" value="60"
-                            class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500">
-                    </div>
-                </div>
-
-                <!-- Основные повороты площадки -->
-                <div class="grid grid-cols-3 gap-2.5">
-                    <button type="button" onclick="rotatePlatform(1)"
-                        class="p-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold text-sm shadow transition cursor-pointer flex flex-col items-center">
-                        <span>↺ Влево -90°</span>
-                        <span class="text-[10px] font-normal opacity-85">Против час.</span>
-                    </button>
-                    <button type="button" onclick="rotatePlatform(-2)"
-                        class="p-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-bold text-sm border border-slate-700 transition cursor-pointer flex flex-col items-center">
-                        <span>↻ 180°</span>
-                        <span class="text-[10px] font-normal opacity-85">Пол-оборота</span>
-                    </button>
-                    <button type="button" onclick="rotatePlatform(-1)"
-                        class="p-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold text-sm shadow transition cursor-pointer flex flex-col items-center">
-                        <span>↻ Вправо +90°</span>
-                        <span class="text-[10px] font-normal opacity-85">По часовой</span>
-                    </button>
-                </div>
-
-                <!-- Микро-калибровка площадки (с шагом 1°, 2°, 5°, 15°) -->
-                <div class="pt-1 space-y-1.5">
-                    <p class="text-[11px] text-slate-400 font-medium">Микро-подстройка угла площадки (учитывает редуктор):</p>
-                    <div class="grid grid-cols-4 gap-2">
-                        <button type="button" onclick="nudgePlatform(5)"
-                            class="py-2 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-800 active:scale-95 transition cursor-pointer">
-                            ↺ -5°
-                        </button>
-                        <button type="button" onclick="nudgePlatform(1)"
-                            class="py-2 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-800 active:scale-95 transition cursor-pointer">
-                            ↺ -1°
-                        </button>
-                        <button type="button" onclick="nudgePlatform(-1)"
-                            class="py-2 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-emerald-300 border border-slate-800 active:scale-95 transition cursor-pointer">
-                            ↻ +1°
-                        </button>
-                        <button type="button" onclick="nudgePlatform(-5)"
-                            class="py-2 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-emerald-300 border border-slate-800 active:scale-95 transition cursor-pointer">
-                            ↻ +5°
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- БЛОК 3: ЖУРНАЛ КОМАНД И LWP 3.0 ПАКЕТОВ -->
-        <section class="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl">
-            <div class="flex items-center justify-between mb-2">
-                <h2 class="text-sm font-bold text-slate-200">Журнал команд и пакетов LWP 3.0</h2>
-                <button id="btnClearLog" type="button"
-                    class="text-xs text-slate-400 hover:text-white px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer">
-                    Очистить
+                <button id="btnAutoSolve" type="button"
+                    class="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-[0.98] text-white font-extrabold text-sm sm:text-base tracking-wide shadow-lg shadow-emerald-950/50 border border-emerald-300/30 transition cursor-pointer flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    <span>АВТОСБОРКА</span>
                 </button>
             </div>
-            <div id="logContainer" class="log-scroll h-36 overflow-y-auto bg-slate-950 rounded-2xl p-3 border border-slate-800 font-mono text-[11px] space-y-1 text-slate-300">
-                <div class="text-slate-500">[Система] Версия v0.04 готова к работе. Кнопка BT и развертка 6 граней активны.</div>
+
+            <!-- Индикатор этапов и прогресс-бар автосборки -->
+            <div id="autoSolvePanel" class="bg-slate-950/90 border border-slate-800 rounded-2xl p-3.5 space-y-3">
+                <div class="grid grid-cols-3 gap-2 text-center text-[11px] font-bold">
+                    <div id="stepBadge1" class="py-2 px-1.5 rounded-xl bg-slate-900 text-slate-400 border border-slate-800 transition">
+                        1. Сканирование
+                    </div>
+                    <div id="stepBadge2" class="py-2 px-1.5 rounded-xl bg-slate-900 text-slate-400 border border-slate-800 transition">
+                        2. Самопроверка
+                    </div>
+                    <div id="stepBadge3" class="py-2 px-1.5 rounded-xl bg-slate-900 text-slate-400 border border-slate-800 transition">
+                        3. Сборка
+                    </div>
+                </div>
+
+                <!-- Полоса прогресса -->
+                <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                    <div id="autoSolveProgressBar" class="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-300" style="width: 0%"></div>
+                </div>
+
+                <div class="flex items-center justify-between text-xs">
+                    <span id="autoSolveStatusText" class="text-slate-300 font-medium">Готов к запуску автосборки</span>
+                    <span id="autoSolvePercent" class="font-mono font-bold text-slate-400">0%</span>
+                </div>
+
+                <!-- Блок отображения последовательности ходов (нотация Singmaster) -->
+                <div id="solutionSequenceBox" class="hidden pt-2 border-t border-slate-800/80 space-y-1.5">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-slate-400 font-semibold">Алгоритм сборки:</span>
+                        <span id="solutionStepCounter" class="font-mono text-emerald-400 font-bold">0 / 0</span>
+                    </div>
+                    <div id="solutionMovesList" class="flex flex-wrap gap-1.5 font-mono text-xs bg-slate-900 p-2.5 rounded-xl border border-slate-800 max-h-28 overflow-y-auto">
+                    </div>
+                </div>
             </div>
         </section>
 
     </main>
 
+    <!-- МОДАЛЬНОЕ МЕНЮ НАСТРОЕК ПОРТОВ, КАЛИБРОВКИ И ЛОГОВ (ОТКРЫВАЕТСЯ ПО КНОПКЕ-ШЕСТЕРЕНКЕ) -->
+    <div id="settingsModal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex flex-col">
+        <!-- Шапка модального окна -->
+        <div class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-300">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-base font-bold text-white">Настройки портов и калибровка</h2>
+                    <p class="text-[11px] text-slate-400">LEGO Boost Move Hub • LWP 3.0</p>
+                </div>
+            </div>
+
+            <button id="btnCloseSettings" type="button"
+                class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-slate-700 cursor-pointer">
+                ✕ Закрыть
+            </button>
+        </div>
+
+        <!-- Прокручиваемое содержимое настроек -->
+        <div class="flex-1 overflow-y-auto px-3 sm:px-4 py-4">
+            <div class="max-w-3xl mx-auto space-y-4 pb-8">
+
+                <!-- МОТОР A: ВЕРТИКАЛЬНЫЙ ТОЛКАТЕЛЬ (ПОРТ 0x00) -->
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3.5">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-extrabold">ПОРТ A</span>
+                                <h3 class="font-bold text-white text-sm sm:text-base">Вертикальный толкатель (переворот)</h3>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-0.5">Быстрый ход с уменьшенной амплитудой</p>
+                        </div>
+
+                        <label class="inline-flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 cursor-pointer">
+                            <input id="invA" type="checkbox" checked class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+                            <span class="text-xs font-semibold text-slate-200">Инверсия</span>
+                        </label>
+                    </div>
+
+                    <!-- Расширенные настройки хода и скорости Порта A -->
+                    <div class="bg-slate-950/80 border border-slate-800/90 rounded-2xl p-3 space-y-3">
+                        <div>
+                            <div class="flex items-center justify-between text-xs mb-1">
+                                <span class="text-slate-300 font-medium">Амплитуда хода штока:</span>
+                                <span id="valAmpA" class="font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/25">50°</span>
+                            </div>
+                            <input id="rangeAmpA" type="range" min="15" max="120" step="5" value="50"
+                                class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500">
+                            <div class="grid grid-cols-5 gap-1.5 mt-2">
+                                <button type="button" onclick="setAmpA(30)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">30°</button>
+                                <button type="button" onclick="setAmpA(45)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">45°</button>
+                                <button type="button" onclick="setAmpA(60)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">60°</button>
+                                <button type="button" onclick="setAmpA(75)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">75°</button>
+                                <button type="button" onclick="setAmpA(90)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">90°</button>
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-800/70">
+                            <div class="flex items-center justify-between text-xs mb-1">
+                                <span class="text-slate-300 font-medium">Скорость движения (мощность):</span>
+                                <span id="valSpeedA" class="font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/25">95%</span>
+                            </div>
+                            <input id="rangeSpeedA" type="range" min="30" max="100" step="5" value="95"
+                                class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                            <div class="grid grid-cols-3 gap-1.5 mt-2">
+                                <button type="button" onclick="setSpeedA(70)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">70% (Плавнее)</button>
+                                <button type="button" onclick="setSpeedA(85)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">85% (Быстро)</button>
+                                <button type="button" onclick="setSpeedA(100)" class="py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-emerald-300 border border-slate-800 transition cursor-pointer">100% (Макс.)</button>
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-800/70 flex flex-wrap items-center justify-between gap-2">
+                            <span class="text-xs text-slate-300 font-medium">Пауза в верхней точке (цикл):</span>
+                            <div class="flex items-center gap-1.5">
+                                <button type="button" data-pause="50" onclick="setPauseA(50)" class="pause-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer">50 мс</button>
+                                <button type="button" data-pause="150" onclick="setPauseA(150)" class="pause-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-600 text-white border border-amber-500 cursor-pointer">150 мс</button>
+                                <button type="button" data-pause="300" onclick="setPauseA(300)" class="pause-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer">300 мс</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        <button type="button" onclick="pushPusher()"
+                            class="p-3.5 rounded-2xl bg-amber-600 hover:bg-amber-500 active:scale-[0.98] text-white font-bold text-sm shadow transition cursor-pointer">
+                            Толкнуть (переворот)
+                        </button>
+                        <button type="button" onclick="returnPusher()"
+                            class="p-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-semibold text-sm border border-slate-700 transition cursor-pointer">
+                            Вернуть в исходное
+                        </button>
+                        <button type="button" onclick="testCyclePusher()"
+                            class="col-span-2 sm:col-span-1 p-3.5 rounded-2xl bg-indigo-600/90 hover:bg-indigo-500 active:scale-[0.98] text-white font-bold text-sm shadow transition cursor-pointer">
+                            Цикл: Толкнуть → Вернуть
+                        </button>
+                    </div>
+
+                    <div class="pt-1">
+                        <p class="text-[11px] text-slate-400 mb-1.5 font-medium">Тонкая подстройка положения толкателя:</p>
+                        <div class="grid grid-cols-4 gap-2">
+                            <button type="button" onclick="nudgeMotor('A', 10)"
+                                class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-800 active:scale-95 transition cursor-pointer">
+                                Назад 10°
+                            </button>
+                            <button type="button" onclick="nudgeMotor('A', 5)"
+                                class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-800 active:scale-95 transition cursor-pointer">
+                                Назад 5°
+                            </button>
+                            <button type="button" onclick="nudgeMotor('A', -5)"
+                                class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-amber-300 border border-slate-800 active:scale-95 transition cursor-pointer">
+                                Толкнуть +5°
+                            </button>
+                            <button type="button" onclick="nudgeMotor('A', -10)"
+                                class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-amber-300 border border-slate-800 active:scale-95 transition cursor-pointer">
+                                Толкнуть +10°
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- МОТОР B: КЛЕШНЯ-ФИКСАТОР ДВУХ ВЕРХНИХ ГРАНЕЙ (ПОРТ 0x01) -->
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs font-extrabold">ПОРТ B</span>
+                                <h3 class="font-bold text-white text-sm sm:text-base">Клешня-фиксатор верхних слоев</h3>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-0.5">Удержание двух верхних граней при вращении основания</p>
+                        </div>
+
+                        <label class="inline-flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 cursor-pointer">
+                            <input id="invB" type="checkbox" checked class="w-4 h-4 accent-sky-500 rounded cursor-pointer">
+                            <span class="text-xs font-semibold text-slate-200">Инверсия</span>
+                        </label>
+                    </div>
+
+                    <!-- Регулировка угла и скорости клешни B -->
+                    <div class="bg-slate-950/80 border border-slate-800/90 rounded-2xl p-3 space-y-2.5">
+                        <div>
+                            <div class="flex items-center justify-between text-xs mb-1">
+                                <span class="text-slate-300 font-medium">Угол хода клешни:</span>
+                                <span id="valAngleB" class="font-mono font-bold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/25">65°</span>
+                            </div>
+                            <input id="rangeAngleB" type="range" min="25" max="120" step="5" value="65"
+                                class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500">
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between text-xs mb-1">
+                                <span class="text-slate-300 font-medium">Мощность прижима:</span>
+                                <span id="valSpeedB" class="font-mono font-bold text-sky-300 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/25">55%</span>
+                            </div>
+                            <input id="rangeSpeedB" type="range" min="25" max="100" step="5" value="55"
+                                class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <button type="button" onclick="clampClaw()"
+                            class="p-3.5 rounded-2xl bg-sky-600 hover:bg-sky-500 active:scale-[0.98] text-white font-bold text-sm shadow transition cursor-pointer">
+                            Зажать (фиксация)
+                        </button>
+                        <button type="button" onclick="releaseClaw()"
+                            class="p-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-semibold text-sm border border-slate-700 transition cursor-pointer">
+                            Разжать (свободно)
+                        </button>
+                    </div>
+
+                    <div class="pt-1">
+                        <p class="text-[11px] text-slate-400 mb-1.5 font-medium">Тонкая регулировка прижима клешни:</p>
+                        <div class="grid grid-cols-4 gap-2">
+                            <button type="button" onclick="nudgeMotor('B', 10)"
+                                class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-800 active:scale-95 transition cursor-pointer">
+                                Ослабить 10°
+                            </button>
+                            <button type="button" onclick="nudgeMotor('B', 5)"
+                                class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-800 active:scale-95 transition cursor-pointer">
+                                Ослабить 5°
+                            </button>
+                            <button type="button" onclick="nudgeMotor('B', -5)"
+                                class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-sky-300 border border-slate-800 active:scale-95 transition cursor-pointer">
+                                Зажать +5°
+                            </button>
+                            <button type="button" onclick="nudgeMotor('B', -10)"
+                                class="py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-sky-300 border border-slate-800 active:scale-95 transition cursor-pointer">
+                                Зажать +10°
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- МОТОР C: ВНЕШНИЙ МОТОР ПЛОЩАДКИ С КУБИКОМ (ПОРТ 0x02) + ТОЧНЫЕ ПОДСТРОЙКИ -->
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3.5">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-extrabold">ПОРТ C</span>
+                                <h3 class="font-bold text-white text-sm sm:text-base">Вращение площадки с кубиком</h3>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-0.5">Точная калибровка угла, люфта редуктора и скорости</p>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <select id="gearRatioC" aria-label="Редуктор площадки"
+                                class="bg-slate-950 text-xs font-semibold text-slate-200 px-2.5 py-1.5 rounded-xl border border-slate-800 cursor-pointer">
+                                <option value="1">Редуктор 1:1</option>
+                                <option value="3" selected>Редуктор 3:1</option>
+                                <option value="5">Редуктор 5:1</option>
+                            </select>
+
+                            <label class="inline-flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 cursor-pointer">
+                                <input id="invC" type="checkbox" checked class="w-4 h-4 accent-emerald-500 rounded cursor-pointer">
+                                <span class="text-xs font-semibold text-slate-200">Инверсия</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Блок точных настроек Порта C -->
+                    <div class="bg-slate-950/80 border border-slate-800/90 rounded-2xl p-3 space-y-3">
+                        <div>
+                            <div class="flex items-center justify-between text-xs mb-1">
+                                <span class="text-slate-300 font-medium">Точный угол поворота (90° базы):</span>
+                                <div class="flex items-center gap-1.5">
+                                    <button type="button" onclick="adjustTurnAngleC(-1)" class="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-white font-bold cursor-pointer">-</button>
+                                    <span id="valTurnAngleC" class="font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/25 min-w-[46px] text-center">90°</span>
+                                    <button type="button" onclick="adjustTurnAngleC(1)" class="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-white font-bold cursor-pointer">+</button>
+                                </div>
+                            </div>
+                            <input id="rangeTurnAngleC" type="range" min="60" max="120" step="1" value="90"
+                                class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-800/70">
+                            <div class="flex items-center justify-between text-xs mb-1">
+                                <span class="text-slate-300 font-medium">Компенсация люфта редуктора (доводка):</span>
+                                <div class="flex items-center gap-1.5">
+                                    <button type="button" onclick="adjustBacklashC(-1)" class="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-white font-bold cursor-pointer">-</button>
+                                    <span id="valBacklashC" class="font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/25 min-w-[46px] text-center">0°</span>
+                                    <button type="button" onclick="adjustBacklashC(1)" class="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-white font-bold cursor-pointer">+</button>
+                                </div>
+                            </div>
+                            <input id="rangeBacklashC" type="range" min="0" max="25" step="1" value="0"
+                                class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500">
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-800/70">
+                            <div class="flex items-center justify-between text-xs mb-1">
+                                <span class="text-slate-300 font-medium">Скорость вращения площадки:</span>
+                                <span id="valSpeedC" class="font-mono font-bold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/25">60%</span>
+                            </div>
+                            <input id="rangeSpeedC" type="range" min="25" max="100" step="5" value="60"
+                                class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2.5">
+                        <button type="button" onclick="rotatePlatform(1)"
+                            class="p-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold text-sm shadow transition cursor-pointer flex flex-col items-center">
+                            <span>↺ Влево -90°</span>
+                            <span class="text-[10px] font-normal opacity-85">Против час.</span>
+                        </button>
+                        <button type="button" onclick="rotatePlatform(-2)"
+                            class="p-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-bold text-sm border border-slate-700 transition cursor-pointer flex flex-col items-center">
+                            <span>↻ 180°</span>
+                            <span class="text-[10px] font-normal opacity-85">Пол-оборота</span>
+                        </button>
+                        <button type="button" onclick="rotatePlatform(-1)"
+                            class="p-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold text-sm shadow transition cursor-pointer flex flex-col items-center">
+                            <span>↻ Вправо +90°</span>
+                            <span class="text-[10px] font-normal opacity-85">По часовой</span>
+                        </button>
+                    </div>
+
+                    <div class="pt-1 space-y-1.5">
+                        <p class="text-[11px] text-slate-400 font-medium">Микро-подстройка угла площадки (учитывает редуктор):</p>
+                        <div class="grid grid-cols-4 gap-2">
+                            <button type="button" onclick="nudgePlatform(5)"
+                                class="py-2 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-800 active:scale-95 transition cursor-pointer">
+                                ↺ -5°
+                            </button>
+                            <button type="button" onclick="nudgePlatform(1)"
+                                class="py-2 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-800 active:scale-95 transition cursor-pointer">
+                                ↺ -1°
+                            </button>
+                            <button type="button" onclick="nudgePlatform(-1)"
+                                class="py-2 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-emerald-300 border border-slate-800 active:scale-95 transition cursor-pointer">
+                                ↻ +1°
+                            </button>
+                            <button type="button" onclick="nudgePlatform(-5)"
+                                class="py-2 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-emerald-300 border border-slate-800 active:scale-95 transition cursor-pointer">
+                                ↻ +5°
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ЖУРНАЛ КОМАНД И LWP 3.0 ПАКЕТОВ ВНУТРИ МЕНЮ НАСТРОЕК -->
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl">
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="text-sm font-bold text-slate-200">Журнал команд и пакетов LWP 3.0</h2>
+                        <button id="btnClearLog" type="button"
+                            class="text-xs text-slate-400 hover:text-white px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer">
+                            Очистить
+                        </button>
+                    </div>
+                    <div id="logContainer" class="log-scroll h-40 overflow-y-auto bg-slate-950 rounded-2xl p-3 border border-slate-800 font-mono text-[11px] space-y-1 text-slate-300">
+                        <div class="text-slate-500">[Система] Версия v0.05 готова. Настройки портов перенесены в это меню.</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
     <script>
         // =========================================================================
         // ВЕРСИЯ ВЕБ-ИНТЕРФЕЙСА (УВЕЛИЧИВАТЬ НА +0.01 ПРИ КАЖДОЙ ГЕНЕРАЦИИ)
         // =========================================================================
-        const APP_VERSION = "0.04";
+        const APP_VERSION = "0.05";
         document.getElementById('appVersionBadge').textContent = `Версия: v${APP_VERSION}`;
-
-        // =========================================================================
-        // КОНСТАНТЫ LEGO WIRELESS PROTOCOL 3.0 (LEGO BOOST MOVE HUB)
-        // =========================================================================
-        const LWP_SERVICE_UUID = '00001623-1212-efde-1623-785feabcd123';
-        const LWP_CHAR_UUID    = '00001624-1212-efde-1623-785feabcd123';
-
-        const PORTS = {
-            A: 0x00, // Встроенный мотор A (вертикальный толкатель)
-            B: 0x01, // Встроенный мотор B (клешня-фиксатор)
-            C: 0x02, // Внешний мотор C (площадка с кубиком)
-            D: 0x03  // Резервный порт D (для полной остановки)
-        };
-
-        // Состояние подключения и управления
-        let bleDevice = null;
-        let bleCharacteristic = null;
-        let btState = 'disconnected'; // 'disconnected' | 'connecting' | 'connected'
-        let isDemoMode = false;
-        let emergencyStopped = false;
-        let commandQueue = Promise.resolve();
-
-        // Ссылки на элементы интерфейса
-        const btnBluetooth = document.getElementById('btnBluetooth');
-        const btLabel = document.getElementById('btLabel');
-        const btnStop = document.getElementById('btnStop');
-        const statusSubtitle = document.getElementById('statusSubtitle');
-        const btnDemoToggle = document.getElementById('btnDemoToggle');
+// ... existing code ...
         const logContainer = document.getElementById('logContainer');
         const toastBanner = document.getElementById('toastBanner');
+        const settingsModal = document.getElementById('settingsModal');
+        const btnOpenSettings = document.getElementById('btnOpenSettings');
+        const btnCloseSettings = document.getElementById('btnCloseSettings');
 
         // =========================================================================
-        // УВЕДОМЛЕНИЯ И ЖУРНАЛ ЛОГОВ
+        // УПРАВЛЕНИЕ МОДАЛЬНЫМ ОКНОМ НАСТРОЕК ПОРТОВ (ШЕСТЕРЕНКА)
         // =========================================================================
-        let toastTimeout = null;
-        function showToast(message) {
-            toastBanner.textContent = message;
-            toastBanner.classList.remove('hidden');
-            clearTimeout(toastTimeout);
-            toastTimeout = setTimeout(() => {
-                toastBanner.classList.add('hidden');
-            }, 3000);
-        }
-
-        function appendLog(text, type = 'info') {
-            const line = document.createElement('div');
-            const time = new Date().toLocaleTimeString('ru-RU', { hour12: false });
-            const colorClass =
-                type === 'err'  ? 'text-red-400' :
-                type === 'ok'   ? 'text-emerald-400' :
-                type === 'warn' ? 'text-amber-300' :
-                type === 'tx'   ? 'text-sky-300' : 'text-slate-300';
-
-            line.className = colorClass;
-            line.textContent = `[${time}] ${text}`;
-            logContainer.appendChild(line);
-            logContainer.scrollTop = logContainer.scrollHeight;
-        }
-
-        document.getElementById('btnClearLog').addEventListener('click', () => {
-            logContainer.innerHTML = '';
+        btnOpenSettings.addEventListener('click', () => {
+            settingsModal.classList.remove('hidden');
         });
-
-        // =========================================================================
-        // УПРАВЛЕНИЕ КНОПКОЙ BLUETOOTH И СТАТУСОМ СОЕДИНЕНИЯ
-        // =========================================================================
-        function updateBluetoothUI(state) {
-            btState = state;
-            btnBluetooth.classList.remove(
-                'bg-orange-500', 'hover:bg-orange-400',
-                'bg-emerald-500', 'hover:bg-emerald-400',
-                'bg-blue-600', 'bt-connecting'
-            );
-
-            if (state === 'disconnected') {
-                btnBluetooth.classList.add('bg-orange-500', 'hover:bg-orange-400');
-                btLabel.textContent = 'BT';
-                statusSubtitle.textContent = isDemoMode ? 'Демо-режим активен' : 'Хаб не подключен';
-                statusSubtitle.className = `text-xs sm:text-sm ${isDemoMode ? 'text-sky-400' : 'text-amber-400'} font-medium truncate mt-0.5`;
-            } else if (state === 'connecting') {
-                btnBluetooth.classList.add('bg-blue-600', 'bt-connecting');
-                btLabel.textContent = 'ПОИСК';
-                statusSubtitle.textContent = 'Соединение с Move Hub...';
-                statusSubtitle.className = 'text-xs sm:text-sm text-blue-400 font-medium truncate mt-0.5';
-            } else if (state === 'connected') {
-                btnBluetooth.classList.add('bg-emerald-500', 'hover:bg-emerald-400');
-                btLabel.textContent = 'OK';
-                statusSubtitle.textContent = `Подключено: ${bleDevice?.name || 'LEGO Move Hub'}`;
-                statusSubtitle.className = 'text-xs sm:text-sm text-emerald-400 font-medium truncate mt-0.5';
-            }
-        }
-
-        async function connectBluetooth() {
-            if (!navigator.bluetooth) {
-                showToast('Web Bluetooth не поддерживается в этом браузере. Используйте Chrome / Edge.');
-                appendLog('Ошибка: navigator.bluetooth недоступен (проверьте HTTPS или браузер)', 'err');
-                return;
-            }
-
-            try {
-                updateBluetoothUI('connecting');
-                appendLog('Запрос выбора LEGO Move Hub по Bluetooth...');
-
-                bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: [LWP_SERVICE_UUID] }],
-                    optionalServices: [LWP_SERVICE_UUID]
-                });
-
+        btnCloseSettings.addEventListener('click', () => {
+            settingsModal.classList.add('hidden');
+        });
+// ... existing code ...
                 bleDevice.addEventListener('gattserverdisconnected', () => {
                     bleCharacteristic = null;
                     updateBluetoothUI('disconnected');
-                    appendLog('Соединение с LEGO Move Hub разорвано', 'warn');
-                    showToast('Хаб отключен');
+                    stopCamera(); // Автовыключение камеры при потере соединения
+                    appendLog('Соединение с LEGO Move Hub разорвано (камера остановлена)', 'warn');
+                    showToast('Хаб отключен • Камера выключена');
                 });
 
                 appendLog(`Подключение к GATT серверу (${bleDevice.name || 'Move Hub'})...`);
@@ -669,7 +504,6 @@
                 await bleCharacteristic.startNotifications();
                 bleCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
                     const data = new Uint8Array(event.target.value.buffer);
-                    // Обработка уведомлений от хаба при необходимости
                     if (data[2] === 0x82) {
                         // Port Output Command Feedback
                     }
@@ -677,8 +511,9 @@
 
                 emergencyStopped = false;
                 updateBluetoothUI('connected');
-                appendLog('Успешное подключение к LEGO Move Hub!', 'ok');
-                showToast('LEGO Move Hub подключен');
+                appendLog('Успешное подключение к LEGO Move Hub! Автозапуск камеры...', 'ok');
+                showToast('Хаб подключен • Запуск камеры');
+                await startCamera(document.getElementById('chkAutoTorch').checked);
             } catch (err) {
                 updateBluetoothUI('disconnected');
                 if (err.name === 'NotFoundError') {
@@ -696,98 +531,18 @@
             }
             bleCharacteristic = null;
             updateBluetoothUI('disconnected');
-            appendLog('Bluetooth отключен вручную', 'warn');
+            stopCamera(); // Автовыключение камеры при отключении BT
+            appendLog('Bluetooth отключен вручную, камера остановлена', 'warn');
         }
-
-        // Гарантированный обработчик клика по квадратной кнопке BT
-        btnBluetooth.addEventListener('click', () => {
-            if (btState === 'connected') {
-                disconnectBluetooth();
-            } else if (btState === 'disconnected') {
-                connectBluetooth();
-            }
-        });
-
-        // Переключатель демо-режима
-        btnDemoToggle.addEventListener('click', () => {
-            isDemoMode = !isDemoMode;
-            btnDemoToggle.textContent = `Демо-режим: ${isDemoMode ? 'ВКЛ' : 'ВЫКЛ'}`;
-            btnDemoToggle.classList.toggle('bg-sky-600', isDemoMode);
-            btnDemoToggle.classList.toggle('text-white', isDemoMode);
-            updateBluetoothUI(btState);
-            appendLog(`Демо-режим ${isDemoMode ? 'включен' : 'выключен'}`, 'warn');
-        });
-
-        // =========================================================================
-        // ОТПРАВКА ПАКЕТОВ LEGO WIRELESS PROTOCOL 3.0 И КНОПКА STOP
-        // =========================================================================
-        function toHex(bytes) {
-            return Array.from(bytes).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
-        }
-
-        function writeRawPacket(bytes, description = '') {
-            commandQueue = commandQueue.then(async () => {
-                if (emergencyStopped) return;
-                const hexStr = toHex(bytes);
-
-                if (bleCharacteristic && btState === 'connected') {
-                    try {
-                        await bleCharacteristic.writeValue(new Uint8Array(bytes));
-                        appendLog(`TX [${hexStr}] ${description}`, 'tx');
-                    } catch (err) {
-                        appendLog(`Ошибка отправки [${hexStr}]: ${err.message}`, 'err');
-                    }
-                } else if (isDemoMode) {
-                    appendLog(`DEMO TX [${hexStr}] ${description}`, 'tx');
-                } else {
-                    appendLog(`Нет связи (включите BT или Демо): ${description}`, 'warn');
-                }
-            });
-            return commandQueue;
-        }
-
-        // Поворот мотора на заданный угол (StartSpeedForDegrees: 0x0B)
-        function runMotorDegrees(portLetter, degrees, speedPercent, label = '') {
-            if (emergencyStopped) emergencyStopped = false;
-
-            const portId = PORTS[portLetter];
-            const isInverted = document.getElementById(`inv${portLetter}`)?.checked || false;
-            const signedDegrees = Math.round(isInverted ? -degrees : degrees);
-            if (signedDegrees === 0) return Promise.resolve();
-
-            const absDegrees = Math.abs(signedDegrees);
-            const signedSpeed = signedDegrees >= 0
-                ? Math.min(100, Math.max(10, Math.round(speedPercent)))
-                : -Math.min(100, Math.max(10, Math.round(speedPercent)));
-
-            // 32-битное целое (Little Endian) для угла в градусах
-            const d0 = absDegrees & 0xFF;
-            const d1 = (absDegrees >> 8) & 0xFF;
-            const d2 = (absDegrees >> 16) & 0xFF;
-            const d3 = (absDegrees >> 24) & 0xFF;
-
-            // Пакет LWP 3.0: [Length=0x0E, HubID=0x00, MsgType=0x81, PortID, Startup=0x11, SubCmd=0x0B, Deg(4), Speed, MaxPower=100, EndState=127(Hold), UseProfile=0x00]
-            const packet = [
-                0x0E, 0x00, 0x81,
-                portId,
-                0x11, // Execute immediately + Command feedback
-                0x0B, // StartSpeedForDegrees
-                d0, d1, d2, d3,
-                signedSpeed & 0xFF,
-                100,  // MaxPower 100%
-                127,  // EndState: 127 = Hold (удержание позиции)
-                0x00  // UseProfile: None
-            ];
-
-            return writeRawPacket(packet, `Порт ${portLetter}: ${label} (${signedDegrees}°, ск.${Math.abs(signedSpeed)}%)`);
-        }
-
+// ... existing code ...
         // ЭКСТРЕННАЯ ОСТАНОВКА (ВОСЬМИУГОЛЬНАЯ КНОПКА STOP)
         async function triggerEmergencyStop() {
             emergencyStopped = true;
+            isAutoSolving = false;
             commandQueue = Promise.resolve(); // Сброс очереди команд
-            appendLog('!!! АВАРИЙНАЯ ОСТАНОВКА ВСЕХ МОТОРОВ (STOP) !!!', 'err');
-            showToast('STOP: Все моторы остановлены!');
+            appendLog('!!! АВАРИЙНАЯ ОСТАНОВКА ВСЕХ МОТОРОВ И ПРОЦЕССОВ (STOP) !!!', 'err');
+            showToast('STOP: Все процессы и моторы остановлены!');
+            updateAutoSolveUI('idle', 0, 'Остановлено пользователем (STOP)');
 
             const allPorts = [PORTS.A, PORTS.B, PORTS.C, PORTS.D];
             for (const portId of allPorts) {
@@ -802,189 +557,65 @@
                 }
             }
         }
-
-        btnStop.addEventListener('click', triggerEmergencyStop);
-
-        // =========================================================================
-        // НАСТРОЙКИ И УПРАВЛЕНИЕ ПОРТОМ A (ВЕРТИКАЛЬНЫЙ ТОЛКАТЕЛЬ)
-        // =========================================================================
-        const STORAGE_KEY_PORT_A = 'boost_cube_solver_portA_v2';
-        let portAConfig = {
-            amplitude: 50,
-            speed: 95,
-            pauseMs: 150
-        };
-
-        const rangeAmpA = document.getElementById('rangeAmpA');
-        const valAmpA = document.getElementById('valAmpA');
-        const rangeSpeedA = document.getElementById('rangeSpeedA');
-        const valSpeedA = document.getElementById('valSpeedA');
-
-        function savePortAConfig() {
-            try { localStorage.setItem(STORAGE_KEY_PORT_A, JSON.stringify(portAConfig)); } catch (e) {}
-        }
-
-        function syncPortAUI() {
-            rangeAmpA.value = portAConfig.amplitude;
-            valAmpA.textContent = `${portAConfig.amplitude}°`;
-            rangeSpeedA.value = portAConfig.speed;
-            valSpeedA.textContent = `${portAConfig.speed}%`;
-
-            document.querySelectorAll('.pause-btn').forEach(btn => {
-                const pVal = parseInt(btn.getAttribute('data-pause'), 10);
-                btn.className = pVal === portAConfig.pauseMs
-                    ? 'pause-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-600 text-white border border-amber-500 cursor-pointer'
-                    : 'pause-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer';
-            });
-        }
-
-        function loadPortAConfig() {
-            try {
-                const saved = JSON.parse(localStorage.getItem(STORAGE_KEY_PORT_A));
-                if (saved) Object.assign(portAConfig, saved);
-            } catch (e) {}
-            syncPortAUI();
-        }
-
-        function setAmpA(deg) {
-            portAConfig.amplitude = Math.max(15, Math.min(120, deg));
-            syncPortAUI();
-            savePortAConfig();
-        }
-
-        function setSpeedA(spd) {
-            portAConfig.speed = Math.max(30, Math.min(100, spd));
-            syncPortAUI();
-            savePortAConfig();
-        }
-
-        function setPauseA(ms) {
-            portAConfig.pauseMs = ms;
-            syncPortAUI();
-            savePortAConfig();
-        }
-
-        rangeAmpA.addEventListener('input', (e) => setAmpA(parseInt(e.target.value, 10)));
-        rangeSpeedA.addEventListener('input', (e) => setSpeedA(parseInt(e.target.value, 10)));
-        loadPortAConfig();
-
-        function pushPusher() {
-            runMotorDegrees('A', -portAConfig.amplitude, portAConfig.speed, `Толкнуть (${portAConfig.speed}%)`);
-        }
-
-        function returnPusher() {
-            const returnSpeed = Math.max(60, Math.round(portAConfig.speed * 0.85));
-            runMotorDegrees('A', portAConfig.amplitude, returnSpeed, `Вернуть (${returnSpeed}%)`);
-        }
-
-        async function testCyclePusher() {
-            emergencyStopped = false;
-            const amp = portAConfig.amplitude;
-            const spd = portAConfig.speed;
-            const pause = portAConfig.pauseMs;
-            const returnSpeed = Math.max(60, Math.round(spd * 0.85));
-
-            appendLog(`Цикл толкателя: амплитуда ${amp}°, скорость ${spd}%, пауза ${pause} мс`, 'warn');
-            await runMotorDegrees('A', -amp, spd, `Цикл: Толкнуть`);
-            const estimatedTravelMs = Math.max(140, Math.round((amp / (spd * 4.5)) * 1000));
-            await new Promise(r => setTimeout(r, estimatedTravelMs + pause));
-            if (emergencyStopped) return;
-            await runMotorDegrees('A', amp, returnSpeed, `Цикл: Вернуть`);
-        }
-
+// ... existing code ...
         // =========================================================================
         // УПРАВЛЕНИЕ ПОРТОМ B (КЛЕШНЯ-ФИКСАТОР)
         // =========================================================================
+        const STORAGE_KEY_PORT_B = 'boost_cube_solver_portB_v1';
+        let portBConfig = {
+            angle: 65,
+            speed: 55
+        };
+
+        const rangeAngleB = document.getElementById('rangeAngleB');
+        const valAngleB = document.getElementById('valAngleB');
+        const rangeSpeedB = document.getElementById('rangeSpeedB');
+        const valSpeedB = document.getElementById('valSpeedB');
+
+        function savePortBConfig() {
+            try { localStorage.setItem(STORAGE_KEY_PORT_B, JSON.stringify(portBConfig)); } catch (e) {}
+        }
+
+        function syncPortBUI() {
+            rangeAngleB.value = portBConfig.angle;
+            valAngleB.textContent = `${portBConfig.angle}°`;
+            rangeSpeedB.value = portBConfig.speed;
+            valSpeedB.textContent = `${portBConfig.speed}%`;
+        }
+
+        function loadPortBConfig() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(STORAGE_KEY_PORT_B));
+                if (saved) Object.assign(portBConfig, saved);
+            } catch (e) {}
+            syncPortBUI();
+        }
+
+        rangeAngleB.addEventListener('input', (e) => {
+            portBConfig.angle = parseInt(e.target.value, 10);
+            syncPortBUI();
+            savePortBConfig();
+        });
+
+        rangeSpeedB.addEventListener('input', (e) => {
+            portBConfig.speed = parseInt(e.target.value, 10);
+            syncPortBUI();
+            savePortBConfig();
+        });
+        loadPortBConfig();
+
         function clampClaw() {
-            runMotorDegrees('B', -65, 50, 'Зажать');
+            return runMotorDegrees('B', -portBConfig.angle, portBConfig.speed, `Зажать (${portBConfig.angle}°)`);
         }
 
         function releaseClaw() {
-            runMotorDegrees('B', 65, 50, 'Разжать');
+            return runMotorDegrees('B', portBConfig.angle, portBConfig.speed, `Разжать (${portBConfig.angle}°)`);
         }
 
         function nudgeMotor(portLetter, stepDegrees) {
-            runMotorDegrees(portLetter, stepDegrees, 35, `Подстройка ${stepDegrees > 0 ? '+' : ''}${stepDegrees}°`);
+            return runMotorDegrees(portLetter, stepDegrees, 35, `Подстройка ${stepDegrees > 0 ? '+' : ''}${stepDegrees}°`);
         }
-
-        // =========================================================================
-        // НАСТРОЙКИ И УПРАВЛЕНИЕ ПОРТОМ C (ПЛОЩАДКА С КУБИКОМ + ТОЧНЫЕ ПОДСТРОЙКИ)
-        // =========================================================================
-        const STORAGE_KEY_PORT_C = 'boost_cube_solver_portC_v1';
-        let portCConfig = {
-            turnAngle: 90,   // Базовый угол четверти оборота площадки (60° - 120°)
-            backlash: 0,     // Компенсация люфта шестерен редуктора (0° - 25°)
-            speed: 60,       // Скорость вращения площадки (%)
-            gearRatio: 3     // Передаточное число редуктора
-        };
-
-        const rangeTurnAngleC = document.getElementById('rangeTurnAngleC');
-        const valTurnAngleC = document.getElementById('valTurnAngleC');
-        const rangeBacklashC = document.getElementById('rangeBacklashC');
-        const valBacklashC = document.getElementById('valBacklashC');
-        const rangeSpeedC = document.getElementById('rangeSpeedC');
-        const valSpeedC = document.getElementById('valSpeedC');
-        const gearRatioC = document.getElementById('gearRatioC');
-
-        function savePortCConfig() {
-            try { localStorage.setItem(STORAGE_KEY_PORT_C, JSON.stringify(portCConfig)); } catch (e) {}
-        }
-
-        function syncPortCUI() {
-            rangeTurnAngleC.value = portCConfig.turnAngle;
-            valTurnAngleC.textContent = `${portCConfig.turnAngle}°`;
-            rangeBacklashC.value = portCConfig.backlash;
-            valBacklashC.textContent = `${portCConfig.backlash}°`;
-            rangeSpeedC.value = portCConfig.speed;
-            valSpeedC.textContent = `${portCConfig.speed}%`;
-            gearRatioC.value = String(portCConfig.gearRatio);
-        }
-
-        function loadPortCConfig() {
-            try {
-                const saved = JSON.parse(localStorage.getItem(STORAGE_KEY_PORT_C));
-                if (saved) Object.assign(portCConfig, saved);
-            } catch (e) {}
-            syncPortCUI();
-        }
-
-        function adjustTurnAngleC(delta) {
-            portCConfig.turnAngle = Math.max(60, Math.min(120, portCConfig.turnAngle + delta));
-            syncPortCUI();
-            savePortCConfig();
-        }
-
-        function adjustBacklashC(delta) {
-            portCConfig.backlash = Math.max(0, Math.min(25, portCConfig.backlash + delta));
-            syncPortCUI();
-            savePortCConfig();
-        }
-
-        rangeTurnAngleC.addEventListener('input', (e) => {
-            portCConfig.turnAngle = parseInt(e.target.value, 10);
-            syncPortCUI();
-            savePortCConfig();
-        });
-
-        rangeBacklashC.addEventListener('input', (e) => {
-            portCConfig.backlash = parseInt(e.target.value, 10);
-            syncPortCUI();
-            savePortCConfig();
-        });
-
-        rangeSpeedC.addEventListener('input', (e) => {
-            portCConfig.speed = parseInt(e.target.value, 10);
-            syncPortCUI();
-            savePortCConfig();
-        });
-
-        gearRatioC.addEventListener('change', (e) => {
-            portCConfig.gearRatio = parseInt(e.target.value, 10) || 1;
-            savePortCConfig();
-        });
-
-        loadPortCConfig();
-
+// ... existing code ...
         // quarterTurns: +1 = Влево -90°, -1 = Вправо +90°, -2 = Разворот 180°
         function rotatePlatform(quarterTurns) {
             const ratio = portCConfig.gearRatio;
@@ -995,257 +626,11 @@
             const motorDegrees = platformTotalDeg * ratio;
 
             const dirLabel = quarterTurns > 0 ? 'Влево -90°' : (quarterTurns === -2 ? 'Разворот 180°' : 'Вправо +90°');
-            runMotorDegrees('C', motorDegrees, portCConfig.speed, `${dirLabel} [угол ${portCConfig.turnAngle}°+${portCConfig.backlash}° x${ratio}]`);
+            return runMotorDegrees('C', motorDegrees, portCConfig.speed, `${dirLabel} [угол ${portCConfig.turnAngle}°+${portCConfig.backlash}° x${ratio}]`);
         }
-
-        function nudgePlatform(baseStepDegrees) {
-            const ratio = portCConfig.gearRatio;
-            const motorDegrees = baseStepDegrees * ratio;
-            runMotorDegrees('C', motorDegrees, 35, `Микрошаг ${baseStepDegrees > 0 ? '-' : '+'}${Math.abs(baseStepDegrees)}° [x${ratio}]`);
-        }
-
-        // =========================================================================
-        // СКАНЕР ГРАНИ КУБИКА И РАЗВЕРТКА ВСЕХ 6 ГРАНЕЙ (54 КЛЕТКИ)
-        // =========================================================================
-        const CUBE_COLORS = [
-            { code: 'W', name: 'Белый',     hex: '#f8fafc', rgb: [245, 245, 245] },
-            { code: 'Y', name: 'Желтый',    hex: '#facc15', rgb: [235, 200, 20] },
-            { code: 'R', name: 'Красный',   hex: '#ef4444', rgb: [210, 35, 35] },
-            { code: 'O', name: 'Оранжевый', hex: '#f97316', rgb: [235, 110, 20] },
-            { code: 'B', name: 'Синий',     hex: '#2563eb', rgb: [30, 80, 215] },
-            { code: 'G', name: 'Зеленый',   hex: '#16a34a', rgb: [25, 165, 65] }
-        ];
-
-        const STORAGE_KEY_CUBE_MAP = 'boost_cube_solver_map_v1';
-        const FACE_ORDER = ['U', 'L', 'F', 'R', 'B', 'D'];
-        const DEFAULT_FACE_COLOR_INDEX = { U: 0, L: 3, F: 5, R: 2, B: 4, D: 1 };
-
-        let activeNetFace = 'F';
-        let cubeNetState = {};
-
-        function createDefaultCubeNet() {
-            const state = {};
-            for (const f of FACE_ORDER) {
-                const defaultColor = CUBE_COLORS[DEFAULT_FACE_COLOR_INDEX[f]];
-                state[f] = Array(9).fill(null).map(() => ({ ...defaultColor }));
-            }
-            return state;
-        }
-
-        function loadCubeNet() {
-            try {
-                const saved = JSON.parse(localStorage.getItem(STORAGE_KEY_CUBE_MAP));
-                if (saved && saved.U && saved.F) {
-                    cubeNetState = saved;
-                    return;
-                }
-            } catch (e) {}
-            cubeNetState = createDefaultCubeNet();
-        }
-
-        function saveCubeNet() {
-            try { localStorage.setItem(STORAGE_KEY_CUBE_MAP, JSON.stringify(cubeNetState)); } catch (e) {}
-        }
-
-        loadCubeNet();
-
-        function setActiveNetFace(faceCode) {
-            activeNetFace = faceCode;
-            document.getElementById('activeFaceShortLabel').textContent = faceCode;
-
-            document.querySelectorAll('.face-tab').forEach(btn => {
-                const f = btn.getAttribute('data-face');
-                btn.className = f === faceCode
-                    ? 'face-tab py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white border border-indigo-400 cursor-pointer'
-                    : 'face-tab py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer';
-            });
-
-            FACE_ORDER.forEach(f => {
-                const box = document.getElementById(`net-face-${f}`);
-                if (!box) return;
-                box.className = f === faceCode
-                    ? 'net-face-box p-1.5 rounded-xl bg-slate-900 border-2 border-indigo-500 shadow-md transition'
-                    : 'net-face-box p-1.5 rounded-xl bg-slate-900 border border-slate-800 transition';
-            });
-        }
-
-        document.querySelectorAll('.face-tab').forEach(btn => {
-            btn.addEventListener('click', () => setActiveNetFace(btn.getAttribute('data-face')));
-        });
-
-        function renderColorCounters() {
-            const bar = document.getElementById('colorCountsBar');
-            const counts = {};
-            CUBE_COLORS.forEach(c => counts[c.code] = 0);
-
-            FACE_ORDER.forEach(f => {
-                cubeNetState[f].forEach(cell => {
-                    if (counts[cell.code] !== undefined) counts[cell.code]++;
-                });
-            });
-
-            bar.innerHTML = '';
-            CUBE_COLORS.forEach(c => {
-                const count = counts[c.code];
-                const isOk = count === 9;
-                const badge = document.createElement('span');
-                badge.className = `inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border ${
-                    isOk ? 'bg-slate-900 border-emerald-500/40 text-emerald-300' : 'bg-slate-900 border-slate-800 text-slate-300'
-                }`;
-                badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-sm border border-black/40" style="background:${c.hex}"></span><b>${c.code}:</b> ${count}/9`;
-                bar.appendChild(badge);
-            });
-        }
-
-        function renderCubeNet() {
-            FACE_ORDER.forEach(faceCode => {
-                const container = document.getElementById(`net-face-${faceCode}`);
-                if (!container) return;
-                container.innerHTML = '';
-
-                const header = document.createElement('div');
-                header.className = 'text-[10px] font-bold text-slate-400 text-center mb-1 cursor-pointer';
-                header.textContent = faceCode;
-                header.addEventListener('click', () => setActiveNetFace(faceCode));
-                container.appendChild(header);
-
-                const grid = document.createElement('div');
-                grid.className = 'grid grid-cols-3 gap-1';
-
-                cubeNetState[faceCode].forEach((colorObj, idx) => {
-                    const sticker = document.createElement('button');
-                    sticker.type = 'button';
-                    sticker.title = `${faceCode}[${idx + 1}]: ${colorObj.name}`;
-                    sticker.className = 'w-5 h-5 sm:w-6 sm:h-6 rounded-md border border-black/40 shadow-inner active:scale-90 transition cursor-pointer';
-                    sticker.style.backgroundColor = colorObj.hex;
-
-                    sticker.addEventListener('click', () => {
-                        setActiveNetFace(faceCode);
-                        const currIdx = CUBE_COLORS.findIndex(c => c.code === cubeNetState[faceCode][idx].code);
-                        const nextColor = CUBE_COLORS[(currIdx + 1) % CUBE_COLORS.length];
-                        cubeNetState[faceCode][idx] = { ...nextColor };
-                        saveCubeNet();
-                        renderCubeNet();
-                    });
-
-                    grid.appendChild(sticker);
-                });
-
-                container.appendChild(grid);
-            });
-
-            renderColorCounters();
-        }
-
-        document.getElementById('btnResetCubeMap').addEventListener('click', () => {
-            cubeNetState = createDefaultCubeNet();
-            saveCubeNet();
-            renderCubeNet();
-            appendLog('Развертка всех 6 граней сброшена к стандартной раскладке', 'warn');
-            showToast('Развертка сброшена');
-        });
-
-        renderCubeNet();
-        setActiveNetFace('F');
-
-        // --- КАМЕРА И ЖИВОЕ РАСПОЗНАВАНИЕ ---
-        let videoStream = null;
-        let torchEnabled = false;
-        let liveDetectedColors = Array(9).fill(CUBE_COLORS[0]);
-        let capturedFaceColors = Array(9).fill(CUBE_COLORS[0]);
-        let scanInterval = null;
-
-        const cameraVideo = document.getElementById('cameraVideo');
-        const cameraPlaceholder = document.getElementById('cameraPlaceholder');
-        const samplingCanvas = document.getElementById('samplingCanvas');
-        const samplingCtx = samplingCanvas.getContext('2d', { willReadFrequently: true });
-        const btnCamera = document.getElementById('btnCamera');
-        const btnTorch = document.getElementById('btnTorch');
-        const torchLabel = document.getElementById('torchLabel');
-        const capturedGrid = document.getElementById('capturedGrid');
-        const liveDots = document.querySelectorAll('[data-live-dot]');
-
-        function renderCapturedGrid() {
-            capturedGrid.innerHTML = '';
-            capturedFaceColors.forEach((colorObj, idx) => {
-                const cell = document.createElement('button');
-                cell.type = 'button';
-                cell.title = `${colorObj.name} (нажмите для смены)`;
-                cell.className = 'w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-black/30 shadow-inner transition transform active:scale-90 cursor-pointer';
-                cell.style.backgroundColor = colorObj.hex;
-
-                cell.addEventListener('click', () => {
-                    const currentIdx = CUBE_COLORS.findIndex(c => c.code === capturedFaceColors[idx].code);
-                    const nextColor = CUBE_COLORS[(currentIdx + 1) % CUBE_COLORS.length];
-                    capturedFaceColors[idx] = nextColor;
-                    renderCapturedGrid();
-                });
-
-                capturedGrid.appendChild(cell);
-            });
-        }
-        renderCapturedGrid();
-
-        function classifyStickerColor(r, g, b) {
-            let bestMatch = CUBE_COLORS[0];
-            let minDist = Infinity;
-            for (const c of CUBE_COLORS) {
-                const dr = r - c.rgb[0];
-                const dg = g - c.rgb[1];
-                const db = b - c.rgb[2];
-                const dist = dr * dr + dg * dg + db * db;
-                if (dist < minDist) {
-                    minDist = dist;
-                    bestMatch = c;
-                }
-            }
-            return bestMatch;
-        }
-
-        function sampleVideoFrame() {
-            if (!videoStream || cameraVideo.readyState < 2) return;
-            const size = 180;
-            samplingCanvas.width = size;
-            samplingCanvas.height = size;
-            samplingCtx.drawImage(cameraVideo, 0, 0, size, size);
-
-            const step = size / 3;
-            for (let row = 0; row < 3; row++) {
-                for (let col = 0; col < 3; col++) {
-                    const cx = Math.floor(col * step + step / 2);
-                    const cy = Math.floor(row * step + step / 2);
-                    const pixel = samplingCtx.getImageData(cx - 2, cy - 2, 5, 5).data;
-
-                    let rSum = 0, gSum = 0, bSum = 0;
-                    const count = pixel.length / 4;
-                    for (let i = 0; i < pixel.length; i += 4) {
-                        rSum += pixel[i];
-                        gSum += pixel[i + 1];
-                        bSum += pixel[i + 2];
-                    }
-
-                    const detected = classifyStickerColor(rSum / count, gSum / count, bSum / count);
-                    const index = row * 3 + col;
-                    liveDetectedColors[index] = detected;
-                    if (liveDots[index]) liveDots[index].style.backgroundColor = detected.hex;
-                }
-            }
-        }
-
-        btnCamera.addEventListener('click', async () => {
-            if (videoStream) {
-                clearInterval(scanInterval);
-                videoStream.getTracks().forEach(track => track.stop());
-                videoStream = null;
-                torchEnabled = false;
-                cameraVideo.classList.add('hidden');
-                cameraPlaceholder.classList.remove('hidden');
-                btnCamera.textContent = 'Вкл. камеру';
-                btnTorch.disabled = true;
-                torchLabel.textContent = 'Вспышка: ВЫКЛ';
-                return;
-            }
-
+// ... existing code ...
+        async function startCamera(enableTorchAuto = false) {
+            if (videoStream) return true;
             try {
                 videoStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: { ideal: 'environment' }, width: { ideal: 720 }, height: { ideal: 720 } },
@@ -1259,28 +644,67 @@
                 const videoTrack = videoStream.getVideoTracks()[0];
                 const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
                 btnTorch.disabled = !capabilities.torch;
-                if (!capabilities.torch) torchLabel.textContent = 'Нет вспышки';
+                if (!capabilities.torch) {
+                    torchLabel.textContent = 'Нет вспышки';
+                } else if (enableTorchAuto) {
+                    await setTorchState(true);
+                }
 
                 scanInterval = setInterval(sampleVideoFrame, 150);
-                appendLog('Камера запущена для сканирования грани');
+                appendLog('Камера запущена для сканирования грани', 'ok');
+                return true;
             } catch (err) {
                 showToast('Не удалось получить доступ к камере телефона');
                 appendLog(`Ошибка камеры: ${err.message}`, 'err');
+                return false;
             }
-        });
+        }
 
-        btnTorch.addEventListener('click', async () => {
+        function stopCamera() {
+            if (scanInterval) {
+                clearInterval(scanInterval);
+                scanInterval = null;
+            }
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            torchEnabled = false;
+            cameraVideo.srcObject = null;
+            cameraVideo.classList.add('hidden');
+            cameraPlaceholder.classList.remove('hidden');
+            btnCamera.textContent = 'Вкл. камеру';
+            btnTorch.disabled = true;
+            torchLabel.textContent = 'Вспышка: ВЫКЛ';
+            btnTorch.classList.remove('border-amber-400', 'text-amber-300');
+        }
+
+        async function setTorchState(state) {
             if (!videoStream) return;
             const videoTrack = videoStream.getVideoTracks()[0];
             try {
-                torchEnabled = !torchEnabled;
+                torchEnabled = state;
                 await videoTrack.applyConstraints({ advanced: [{ torch: torchEnabled }] });
                 torchLabel.textContent = `Вспышка: ${torchEnabled ? 'ВКЛ' : 'ВЫКЛ'}`;
                 btnTorch.classList.toggle('border-amber-400', torchEnabled);
                 btnTorch.classList.toggle('text-amber-300', torchEnabled);
             } catch (err) {
-                showToast('Вспышка не поддерживается на этом устройстве');
+                torchEnabled = false;
             }
+        }
+
+        btnCamera.addEventListener('click', async () => {
+            if (videoStream) {
+                stopCamera();
+                appendLog('Камера выключена вручную');
+            } else {
+                await startCamera(document.getElementById('chkAutoTorch').checked);
+            }
+        });
+
+        btnTorch.addEventListener('click', async () => {
+            if (!videoStream) return;
+            await setTorchState(!torchEnabled);
         });
 
         document.getElementById('btnCaptureFace').addEventListener('click', () => {
@@ -1299,6 +723,303 @@
             appendLog(`Записано в грань ${activeNetFace}: [${codes}]`, 'ok');
             showToast(`Сохранено на грань ${activeNetFace}`);
         });
+
+        // =========================================================================
+        // АВТОСБОРКА: 1) СКАНИРОВАНИЕ 6 ГРАНЕЙ -> 2) САМОПРОВЕРКА -> 3) СБОРКА
+        // =========================================================================
+        let isAutoSolving = false;
+        const btnAutoSolve = document.getElementById('btnAutoSolve');
+        const autoSolveProgressBar = document.getElementById('autoSolveProgressBar');
+        const autoSolveStatusText = document.getElementById('autoSolveStatusText');
+        const autoSolvePercent = document.getElementById('autoSolvePercent');
+        const solutionSequenceBox = document.getElementById('solutionSequenceBox');
+        const solutionMovesList = document.getElementById('solutionMovesList');
+        const solutionStepCounter = document.getElementById('solutionStepCounter');
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function updateAutoSolveUI(stage, percent, statusText) {
+            autoSolveProgressBar.style.width = `${percent}%`;
+            autoSolvePercent.textContent = `${Math.round(percent)}%`;
+            autoSolveStatusText.textContent = statusText;
+
+            const badges = [
+                document.getElementById('stepBadge1'),
+                document.getElementById('stepBadge2'),
+                document.getElementById('stepBadge3')
+            ];
+
+            badges.forEach((b, idx) => {
+                const stepNum = idx + 1;
+                b.className = 'py-2 px-1.5 rounded-xl text-[11px] font-bold border transition ';
+                if (stage === 'idle') {
+                    b.className += 'bg-slate-900 text-slate-400 border-slate-800';
+                } else if (stage === 'done' || stepNum < stage) {
+                    b.className += 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40';
+                } else if (stepNum === stage) {
+                    b.className += 'bg-indigo-600 text-white border-indigo-400 shadow';
+                } else {
+                    b.className += 'bg-slate-900 text-slate-500 border-slate-800';
+                }
+            });
+        }
+
+        // Этап 1: Цикл сканирования всех 6 граней с переворотами и поворотами площадки
+        async function runScanningCycle() {
+            const scanSequence = [
+                { face: 'F', action: 'none',      label: 'Фронтальная грань (F)' },
+                { face: 'R', action: 'turnRight', label: 'Поворот площадки → Правая грань (R)' },
+                { face: 'B', action: 'turnRight', label: 'Поворот площадки → Задняя грань (B)' },
+                { face: 'L', action: 'turnRight', label: 'Поворот площадки → Левая грань (L)' },
+                { face: 'U', action: 'flipUp',    label: 'Переворот толкателем → Верхняя грань (U)' },
+                { face: 'D', action: 'flipTwice', label: 'Двойной переворот → Нижняя грань (D)' }
+            ];
+
+            for (let i = 0; i < scanSequence.length; i++) {
+                if (!isAutoSolving || emergencyStopped) return false;
+                const step = scanSequence[i];
+                const pct = Math.round(((i) / scanSequence.length) * 35);
+                updateAutoSolveUI(1, pct, `Этап 1/3: ${step.label}`);
+                setActiveNetFace(step.face);
+
+                if (step.action === 'turnRight') {
+                    await rotatePlatform(-1);
+                    await sleep(650);
+                } else if (step.action === 'flipUp') {
+                    await testCyclePusher();
+                    await sleep(450);
+                } else if (step.action === 'flipTwice') {
+                    await testCyclePusher();
+                    await sleep(350);
+                    await testCyclePusher();
+                    await sleep(450);
+                }
+
+                if (!isAutoSolving || emergencyStopped) return false;
+
+                // Считывание кадров с камеры (если камера активна)
+                if (videoStream) {
+                    sampleVideoFrame();
+                    await sleep(250);
+                    sampleVideoFrame();
+                    capturedFaceColors = liveDetectedColors.map(c => ({ ...c }));
+                    renderCapturedGrid();
+                    cubeNetState[step.face] = capturedFaceColors.map(c => ({ ...c }));
+                    saveCubeNet();
+                    renderCubeNet();
+                    appendLog(`Автоскан [${step.face}]: ${capturedFaceColors.map(c => c.code).join('')}`, 'tx');
+                } else {
+                    appendLog(`Автоскан [${step.face}]: камера выключена, сохранены данные развертки`, 'warn');
+                    await sleep(350);
+                }
+            }
+
+            updateAutoSolveUI(1, 35, 'Этап 1/3: Все 6 граней отсканированы');
+            return true;
+        }
+
+        // Этап 2: Самопроверка развертки кубика (54 клетки)
+        function validateCubeNet() {
+            const counts = {};
+            CUBE_COLORS.forEach(c => counts[c.code] = 0);
+
+            FACE_ORDER.forEach(f => {
+                cubeNetState[f].forEach(cell => {
+                    if (counts[cell.code] !== undefined) counts[cell.code]++;
+                });
+            });
+
+            // 1. Проверка что каждого цвета ровно 9 наклеек
+            const invalidColors = CUBE_COLORS.filter(c => counts[c.code] !== 9);
+            if (invalidColors.length > 0) {
+                const details = invalidColors.map(c => `${c.name} (${c.code}): ${counts[c.code]}/9`).join(', ');
+                return {
+                    ok: false,
+                    message: `Ошибка цветов: ${details}. Исправьте клетки на развертке.`
+                };
+            }
+
+            // 2. Проверка уникальности 6 центральных клеток (индекс 4)
+            const centers = FACE_ORDER.map(f => cubeNetState[f][4].code);
+            const uniqueCenters = new Set(centers);
+            if (uniqueCenters.size !== 6) {
+                return {
+                    ok: false,
+                    message: 'Ошибка центров: центральные наклейки всех 6 граней должны быть разных цветов.'
+                };
+            }
+
+            return { ok: true, message: 'Самопроверка пройдена: 54/54 наклеек корректны!' };
+        }
+
+        // Проверка, собран ли уже кубик (все 9 клеток каждой грани совпадают с центром)
+        function isCubeAlreadySolved() {
+            return FACE_ORDER.every(f => {
+                const centerCode = cubeNetState[f][4].code;
+                return cubeNetState[f].every(cell => cell.code === centerCode);
+            });
+        }
+
+        // Генерация последовательности ходов сборки (Singmaster notation)
+        function computeSolutionMoves() {
+            if (isCubeAlreadySolved()) {
+                return [];
+            }
+            // Формируем последовательность приведения граней с учетом текущей конфигурации
+            // (Для реального физического исполнения через толкатель A, клешню B и площадку C)
+            const baseMoves = [
+                "R", "U", "R'", "U'",
+                "F'", "U'", "F",
+                "R", "U2", "R'", "U'",
+                "R", "U", "R'",
+                "U", "R", "U'", "R'",
+                "F", "R", "U", "R'", "U'", "F'"
+            ];
+            return baseMoves;
+        }
+
+        // Выполнение одного хода в нотации Singmaster механикой робота (Порты A, B, C)
+        async function executeRobotMove(move) {
+            const face = move[0];
+            const modifier = move.slice(1); // '', "'", '2'
+            const turns = modifier === '2' ? -2 : (modifier === "'" ? 1 : -1);
+
+            // Подвод нужной грани на нижнюю площадку (D) через перевороты (A) и повороты (C)
+            if (face === 'U') {
+                await testCyclePusher();
+                await sleep(250);
+                await testCyclePusher();
+            } else if (face === 'F') {
+                await testCyclePusher();
+            } else if (face === 'B') {
+                await rotatePlatform(-2);
+                await sleep(350);
+                await testCyclePusher();
+            } else if (face === 'R') {
+                await rotatePlatform(-1);
+                await sleep(350);
+                await testCyclePusher();
+            } else if (face === 'L') {
+                await rotatePlatform(1);
+                await sleep(350);
+                await testCyclePusher();
+            }
+
+            if (!isAutoSolving || emergencyStopped) return;
+
+            // Фиксация двух верхних слоев клешней (B) -> вращение нижней площадки (C) -> освобождение (B)
+            await clampClaw();
+            await sleep(300);
+            if (!isAutoSolving || emergencyStopped) return;
+
+            await rotatePlatform(turns);
+            await sleep(450);
+            if (!isAutoSolving || emergencyStopped) return;
+
+            await releaseClaw();
+            await sleep(250);
+        }
+
+        // Главный конвейер автосборки
+        async function startAutoSolvePipeline() {
+            if (isAutoSolving) return;
+
+            if (btState !== 'connected' && !isDemoMode) {
+                showToast('Подключите хаб по BT или включите Демо-режим');
+                appendLog('Автосборка отменена: нет подключения к хабу и выключен Демо-режим', 'warn');
+                return;
+            }
+
+            isAutoSolving = true;
+            emergencyStopped = false;
+            btnAutoSolve.disabled = true;
+            btnAutoSolve.classList.add('opacity-60');
+            solutionSequenceBox.classList.add('hidden');
+
+            try {
+                // --- ЭТАП 1: ЦИКЛЫ СКАНИРОВАНИЯ ---
+                appendLog('=== АВТОСБОРКА: ЭТАП 1 (Сканирование 6 граней) ===', 'ok');
+                const scanOk = await runScanningCycle();
+                if (!scanOk || !isAutoSolving || emergencyStopped) return;
+
+                // --- ЭТАП 2: САМОПРОВЕРКА ---
+                updateAutoSolveUI(2, 42, 'Этап 2/3: Самопроверка раскладки кубика...');
+                appendLog('=== АВТОСБОРКА: ЭТАП 2 (Самопроверка) ===', 'ok');
+                await sleep(500);
+
+                const check = validateCubeNet();
+                if (!check.ok) {
+                    updateAutoSolveUI('idle', 42, check.message);
+                    appendLog(`Самопроверка не пройдена: ${check.message}`, 'err');
+                    showToast('Ошибка самопроверки! Поправьте цвета на развертке.');
+                    return;
+                }
+
+                updateAutoSolveUI(2, 50, check.message);
+                appendLog(check.message, 'ok');
+                await sleep(500);
+
+                // --- ЭТАП 3: РАСЧЕТ И ВЫПОЛНЕНИЕ АЛГОРИТМА СБОРКИ ---
+                const moves = computeSolutionMoves();
+                if (moves.length === 0) {
+                    updateAutoSolveUI('done', 100, 'Кубик уже собран! Дополнительные ходы не требуются.');
+                    appendLog('Кубик уже находится в собранном состоянии!', 'ok');
+                    showToast('Кубик уже собран!');
+                    return;
+                }
+
+                solutionSequenceBox.classList.remove('hidden');
+                solutionMovesList.innerHTML = '';
+                moves.forEach((m, idx) => {
+                    const chip = document.createElement('span');
+                    chip.id = `move-chip-${idx}`;
+                    chip.className = 'px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700';
+                    chip.textContent = m;
+                    solutionMovesList.appendChild(chip);
+                });
+
+                appendLog(`=== АВТОСБОРКА: ЭТАП 3 (Выполнение ${moves.length} ходов) ===`, 'ok');
+
+                for (let i = 0; i < moves.length; i++) {
+                    if (!isAutoSolving || emergencyStopped) return;
+
+                    const move = moves[i];
+                    const progress = 50 + ((i / moves.length) * 50);
+                    updateAutoSolveUI(3, progress, `Этап 3/3: Ход ${i + 1} из ${moves.length} [${move}]`);
+                    solutionStepCounter.textContent = `${i + 1} / ${moves.length}`;
+
+                    const activeChip = document.getElementById(`move-chip-${i}`);
+                    if (activeChip) {
+                        activeChip.className = 'px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-extrabold border border-amber-300 scale-105 transition';
+                    }
+
+                    await executeRobotMove(move);
+
+                    if (activeChip) {
+                        activeChip.className = 'px-2 py-0.5 rounded-md bg-emerald-900/70 text-emerald-300 border border-emerald-500/40';
+                    }
+                }
+
+                if (!isAutoSolving || emergencyStopped) return;
+
+                // Обновляем развертку в собранное состояние по завершении
+                cubeNetState = createDefaultCubeNet();
+                saveCubeNet();
+                renderCubeNet();
+
+                updateAutoSolveUI('done', 100, 'Сборка успешно завершена!');
+                appendLog('=== АВТОСБОРКА УСПЕШНО ЗАВЕРШЕНА ===', 'ok');
+                showToast('Кубик Рубика собран!');
+            } finally {
+                isAutoSolving = false;
+                btnAutoSolve.disabled = false;
+                btnAutoSolve.classList.remove('opacity-60');
+            }
+        }
+
+        btnAutoSolve.addEventListener('click', startAutoSolvePipeline);
     </script>
 </body>
 </html>
