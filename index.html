@@ -68,8 +68,16 @@
 </head>
 <body class="min-h-screen flex flex-col select-none">
 
-    <!-- ВЕРХНЯЯ ПАНЕЛЬ: Кнопка STOP слева (восьмиугольник) и кнопка BT справа (квадрат) -->
-    <header class="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3 shadow-lg">
+    <!-- ВЕРХНЯЯ ПАНЕЛЬ: Строка версии + Кнопка STOP слева (восьмиугольник) и кнопка BT справа (квадрат) -->
+    <header class="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 pt-1.5 pb-3 shadow-lg">
+        <!-- Полоса индикации версии интерфейса над кнопкой STOP -->
+        <div class="max-w-3xl mx-auto flex items-center justify-between text-[11px] text-slate-400 pb-1.5 mb-1.5 border-b border-slate-800/70">
+            <span id="appVersionBadge" class="font-mono font-semibold text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/70">
+                Версия: 0.03
+            </span>
+            <span class="text-[10px] text-slate-500">LEGO Boost Move Hub • LWP 3.0</span>
+        </div>
+
         <div class="max-w-3xl mx-auto flex items-center justify-between gap-3">
             
             <!-- СЛЕВА: Восьмиугольная кнопка STOP -->
@@ -202,14 +210,14 @@
             </div>
 
             <!-- МОТОР A: ВЕРТИКАЛЬНЫЙ ТОЛКАТЕЛЬ (ПОРТ 0x00) -->
-            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3">
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3.5">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <div class="flex items-center gap-2">
                             <span class="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-extrabold">ПОРТ A</span>
                             <h3 class="font-bold text-white text-sm sm:text-base">Вертикальный толкатель (переворот)</h3>
                         </div>
-                        <p class="text-xs text-slate-400 mt-0.5">Направление инвертировано под конструкцию толкателя</p>
+                        <p class="text-xs text-slate-400 mt-0.5">Быстрый ход с уменьшенной амплитудой (инверсия включена)</p>
                     </div>
 
                     <!-- Переключатель инверсии мотора A -->
@@ -219,7 +227,52 @@
                     </label>
                 </div>
 
-                <!-- Основные действия толкателя (знаки инвертированы относительно v1: Толкнуть = -105°, Вернуть = +105°) -->
+                <!-- Расширенные настройки хода и скорости Порта A -->
+                <div class="bg-slate-950/80 border border-slate-800/90 rounded-2xl p-3 space-y-3">
+                    <!-- 1. Амплитуда хода (Угол) -->
+                    <div>
+                        <div class="flex items-center justify-between text-xs mb-1">
+                            <span class="text-slate-300 font-medium">Амплитуда хода штока:</span>
+                            <span id="valAmpA" class="font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/25">50°</span>
+                        </div>
+                        <input id="rangeAmpA" type="range" min="15" max="120" step="5" value="50"
+                            class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500">
+                        <div class="grid grid-cols-5 gap-1.5 mt-2">
+                            <button type="button" onclick="setAmpA(30)" class="amp-preset-btn py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">30°</button>
+                            <button type="button" onclick="setAmpA(45)" class="amp-preset-btn py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">45°</button>
+                            <button type="button" onclick="setAmpA(60)" class="amp-preset-btn py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">60°</button>
+                            <button type="button" onclick="setAmpA(75)" class="amp-preset-btn py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">75°</button>
+                            <button type="button" onclick="setAmpA(90)" class="amp-preset-btn py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">90°</button>
+                        </div>
+                    </div>
+
+                    <!-- 2. Скорость / Мощность толкателя -->
+                    <div class="pt-2 border-t border-slate-800/70">
+                        <div class="flex items-center justify-between text-xs mb-1">
+                            <span class="text-slate-300 font-medium">Скорость движения (мощность):</span>
+                            <span id="valSpeedA" class="font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/25">95%</span>
+                        </div>
+                        <input id="rangeSpeedA" type="range" min="30" max="100" step="5" value="95"
+                            class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                        <div class="grid grid-cols-3 gap-1.5 mt-2">
+                            <button type="button" onclick="setSpeedA(70)" class="speed-preset-btn py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">70% (Плавнее)</button>
+                            <button type="button" onclick="setSpeedA(85)" class="speed-preset-btn py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 border border-slate-800 transition cursor-pointer">85% (Быстро)</button>
+                            <button type="button" onclick="setSpeedA(100)" class="speed-preset-btn py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-emerald-300 border border-slate-800 transition cursor-pointer">100% (Макс.)</button>
+                        </div>
+                    </div>
+
+                    <!-- 3. Пауза в верхней точке при цикле -->
+                    <div class="pt-2 border-t border-slate-800/70 flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-xs text-slate-300 font-medium">Пауза в верхней точке (цикл):</span>
+                        <div class="flex items-center gap-1.5" id="pauseGroupA">
+                            <button type="button" data-pause="50" onclick="setPauseA(50)" class="pause-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer">50 мс</button>
+                            <button type="button" data-pause="150" onclick="setPauseA(150)" class="pause-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-600 text-white border border-amber-500 cursor-pointer">150 мс</button>
+                            <button type="button" data-pause="300" onclick="setPauseA(300)" class="pause-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer">300 мс</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Основные действия толкателя (используют выбранную амплитуду и скорость) -->
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     <button type="button" onclick="pushPusher()"
                         class="p-3.5 rounded-2xl bg-amber-600 hover:bg-amber-500 active:scale-[0.98] text-white font-bold text-sm shadow transition cursor-pointer">
@@ -395,7 +448,7 @@
                 </button>
             </div>
             <div id="logContainer" class="log-scroll h-36 overflow-y-auto bg-slate-950 rounded-2xl p-3 border border-slate-800 font-mono text-[11px] space-y-1 text-slate-300">
-                <div class="text-slate-500">[Система] Готово к работе. Направления моторов A, B, C инвертированы под механику робота.</div>
+                <div class="text-slate-500">[Система] Версия 0.03 готова к работе. Настройки Порта A: быстрый ход с малой амплитудой.</div>
             </div>
         </section>
 
@@ -403,249 +456,125 @@
 
     <script>
         // =========================================================================
+        // ВЕРСИЯ ВЕБ-ИНТЕРФЕЙСА (УВЕЛИЧИВАТЬ НА +0.01 ПРИ КАЖДОЙ ГЕНЕРАЦИИ)
+        // =========================================================================
+        const APP_VERSION = "0.03";
+        document.getElementById('appVersionBadge').textContent = `Версия: ${APP_VERSION}`;
+
+        // =========================================================================
         // КОНСТАНТЫ LEGO WIRELESS PROTOCOL 3.0 (LEGO BOOST MOVE HUB)
         // =========================================================================
         const LWP_SERVICE_UUID = '00001623-1212-efde-1623-785feabcd123';
-        const LWP_CHAR_UUID    = '00001624-1212-efde-1623-785feabcd123';
-
-        const PORTS = {
-            A: 0x00, // Внутренний мотор A (Вертикальный толкатель)
-            B: 0x01, // Внутренний мотор B (Клешня-фиксатор)
-            C: 0x02, // Внешний порт C (Площадка вращения)
-            D: 0x03  // Внешний порт D (резерв для аварийной остановки)
+// ... existing code ... -->
+        // --- МОТОР A: ВЕРТИКАЛЬНЫЙ ТОЛКАТЕЛЬ (БЫСТРЫЙ ХОД + МАЛАЯ АМПЛИТУДА + LOCALSTORAGE) ---
+        const STORAGE_KEY_PORT_A = 'boost_cube_solver_portA_v1';
+        let portAConfig = {
+            amplitude: 50, // Уменьшенная амплитуда по умолчанию (градусы)
+            speed: 95,     // Высокая скорость по умолчанию (%)
+            pauseMs: 150   // Пауза в верхней точке перед возвратом (мс)
         };
 
-        // Состояние подключения и приложения
-        let bleDevice = null;
-        let bleCharacteristic = null;
-        let connectionState = 'disconnected'; // 'disconnected' | 'connecting' | 'connected'
-        let isDemoMode = false;
-        let emergencyStopped = false;
+        const rangeAmpA = document.getElementById('rangeAmpA');
+        const valAmpA = document.getElementById('valAmpA');
+        const rangeSpeedA = document.getElementById('rangeSpeedA');
+        const valSpeedA = document.getElementById('valSpeedA');
 
-        // =========================================================================
-        // UI УТИЛИТЫ (УВЕДОМЛЕНИЯ, ЛОГИРОВАНИЕ, СТАТУС КНОПКИ BT)
-        // =========================================================================
-        const btnBluetooth = document.getElementById('btnBluetooth');
-        const btLabel = document.getElementById('btLabel');
-        const statusSubtitle = document.getElementById('statusSubtitle');
-        const logContainer = document.getElementById('logContainer');
-        const toastBanner = document.getElementById('toastBanner');
-        let toastTimer = null;
-
-        function showToast(message) {
-            toastBanner.textContent = message;
-            toastBanner.classList.remove('hidden');
-            clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => {
-                toastBanner.classList.add('hidden');
-            }, 3000);
-        }
-
-        function appendLog(text, type = 'info') {
-            const line = document.createElement('div');
-            const now = new Date().toLocaleTimeString('ru-RU', { hour12: false });
-            let colorClass = 'text-slate-300';
-            if (type === 'tx') colorClass = 'text-emerald-400';
-            if (type === 'warn') colorClass = 'text-amber-400';
-            if (type === 'err') colorClass = 'text-red-400';
-
-            line.className = colorClass;
-            line.textContent = `[${now}] ${text}`;
-            logContainer.appendChild(line);
-            logContainer.scrollTop = logContainer.scrollHeight;
-        }
-
-        document.getElementById('btnClearLog').addEventListener('click', () => {
-            logContainer.innerHTML = '';
-        });
-
-        function updateBtButtonUI(state) {
-            connectionState = state;
-            btnBluetooth.classList.remove('bg-orange-500', 'hover:bg-orange-400', 'bt-connecting', 'bg-emerald-600', 'hover:bg-emerald-500');
-
-            if (state === 'disconnected') {
-                btnBluetooth.classList.add('bg-orange-500', 'hover:bg-orange-400');
-                btLabel.textContent = 'BT';
-                statusSubtitle.textContent = isDemoMode ? 'Активен Демо-режим (без хаба)' : 'Хаб не подключен';
-                statusSubtitle.className = 'text-xs sm:text-sm text-amber-400 font-medium truncate mt-0.5';
-            } else if (state === 'connecting') {
-                btnBluetooth.classList.add('bt-connecting');
-                btLabel.textContent = 'ПОИСК...';
-                statusSubtitle.textContent = 'Соединение с LEGO Move Hub...';
-                statusSubtitle.className = 'text-xs sm:text-sm text-sky-400 font-medium truncate mt-0.5';
-            } else if (state === 'connected') {
-                btnBluetooth.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
-                btLabel.textContent = 'OK';
-                statusSubtitle.textContent = 'LEGO Move Hub подключен';
-                statusSubtitle.className = 'text-xs sm:text-sm text-emerald-400 font-medium truncate mt-0.5';
-            }
-        }
-
-        // Переключение Демо-режима
-        const btnDemoToggle = document.getElementById('btnDemoToggle');
-        btnDemoToggle.addEventListener('click', () => {
-            isDemoMode = !isDemoMode;
-            btnDemoToggle.textContent = `Демо-режим: ${isDemoMode ? 'ВКЛ' : 'ВЫКЛ'}`;
-            btnDemoToggle.classList.toggle('border-emerald-500', isDemoMode);
-            btnDemoToggle.classList.toggle('text-emerald-300', isDemoMode);
-            updateBtButtonUI(connectionState);
-            appendLog(`Демо-режим ${isDemoMode ? 'включен (пакеты симулируются)' : 'выключен'}`, 'warn');
-        });
-
-        // =========================================================================
-        // BLUETOOTH WEB API (ПОДКЛЮЧЕНИЕ И ОТПРАВКА ПАКЕТОВ LWP 3.0)
-        // =========================================================================
-        btnBluetooth.addEventListener('click', async () => {
-            if (connectionState === 'connected' && bleDevice) {
-                bleDevice.gatt.disconnect();
-                return;
-            }
-
-            if (!navigator.bluetooth) {
-                showToast('Web Bluetooth не поддерживается в этом браузере. Используйте Chrome/Edge по HTTPS.');
-                appendLog('Ошибка: navigator.bluetooth недоступен', 'err');
-                return;
-            }
-
+        function savePortAConfig() {
             try {
-                updateBtButtonUI('connecting');
-                appendLog('Поиск LEGO Move Hub по Bluetooth...');
-
-                bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: [LWP_SERVICE_UUID] }]
-                });
-
-                bleDevice.addEventListener('gattserverdisconnected', () => {
-                    bleCharacteristic = null;
-                    updateBtButtonUI('disconnected');
-                    appendLog('Соединение с хабом разорвано', 'warn');
-                });
-
-                const server = await bleDevice.gatt.connect();
-                const service = await server.getPrimaryService(LWP_SERVICE_UUID);
-                bleCharacteristic = await service.getCharacteristic(LWP_CHAR_UUID);
-
-                updateBtButtonUI('connected');
-                appendLog(`Подключено к устройству: ${bleDevice.name || 'LEGO Move Hub'}`, 'tx');
-                showToast('LEGO Move Hub успешно подключен!');
-            } catch (error) {
-                updateBtButtonUI('disconnected');
-                appendLog(`Отмена или ошибка подключения: ${error.message}`, 'err');
+                localStorage.setItem(STORAGE_KEY_PORT_A, JSON.stringify(portAConfig));
+            } catch (e) {
+                // Игнорируем ошибку, если хранилище недоступно
             }
+        }
+
+        function syncPortAUI() {
+            rangeAmpA.value = portAConfig.amplitude;
+            valAmpA.textContent = `${portAConfig.amplitude}°`;
+
+            rangeSpeedA.value = portAConfig.speed;
+            valSpeedA.textContent = `${portAConfig.speed}%`;
+
+            document.querySelectorAll('.pause-btn').forEach(btn => {
+                const pVal = parseInt(btn.getAttribute('data-pause'), 10);
+                if (pVal === portAConfig.pauseMs) {
+                    btn.className = 'pause-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-600 text-white border border-amber-500 cursor-pointer';
+                } else {
+                    btn.className = 'pause-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 text-slate-300 border border-slate-800 cursor-pointer';
+                }
+            });
+        }
+
+        function loadPortAConfig() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY_PORT_A);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (typeof parsed.amplitude === 'number') portAConfig.amplitude = parsed.amplitude;
+                    if (typeof parsed.speed === 'number') portAConfig.speed = parsed.speed;
+                    if (typeof parsed.pauseMs === 'number') portAConfig.pauseMs = parsed.pauseMs;
+                }
+            } catch (e) {
+                // Используем значения по умолчанию
+            }
+            syncPortAUI();
+        }
+
+        function setAmpA(deg) {
+            portAConfig.amplitude = Math.max(15, Math.min(120, deg));
+            syncPortAUI();
+            savePortAConfig();
+        }
+
+        function setSpeedA(spd) {
+            portAConfig.speed = Math.max(30, Math.min(100, spd));
+            syncPortAUI();
+            savePortAConfig();
+        }
+
+        function setPauseA(ms) {
+            portAConfig.pauseMs = ms;
+            syncPortAUI();
+            savePortAConfig();
+        }
+
+        rangeAmpA.addEventListener('input', (e) => {
+            setAmpA(parseInt(e.target.value, 10));
         });
 
-        function toHex(uint8Array) {
-            return Array.from(uint8Array)
-                .map(b => b.toString(16).padStart(2, '0').toUpperCase())
-                .join(' ');
-        }
-
-        async function sendLwpPacket(packet, description = '') {
-            const hexStr = toHex(packet);
-
-            if (connectionState === 'connected' && bleCharacteristic) {
-                try {
-                    await bleCharacteristic.writeValue(packet);
-                    appendLog(`TX [${description}]: ${hexStr}`, 'tx');
-                } catch (err) {
-                    appendLog(`Ошибка отправки: ${err.message}`, 'err');
-                }
-            } else if (isDemoMode) {
-                appendLog(`DEMO TX [${description}]: ${hexStr}`, 'tx');
-            } else {
-                appendLog(`Не отправлено (нет соединения) [${description}]: ${hexStr}`, 'warn');
-                showToast('Подключите хаб (кнопка BT) или включите Демо-режим');
-            }
-        }
-
-        // Формирование пакета StartSpeedForDegrees (0x0B) по протоколу LWP 3.0
-        // Длина: 0x0E (14 байт), HubID: 0x00, MsgType: 0x81 (Port Output Command)
-        // Startup/Completion: 0x11 (Execute immediately + Command feedback)
-        // SubCommand: 0x0B (StartSpeedForDegrees)
-        function buildStartSpeedForDegreesPacket(portId, degrees, speed = 50, maxPower = 100, endState = 127) {
-            const absDegrees = Math.max(0, Math.round(Math.abs(degrees)));
-            // Знак скорости определяет направление вращения в LWP 3.0
-            const signedSpeed = degrees >= 0 ? Math.abs(speed) : -Math.abs(speed);
-            const speedByte = signedSpeed < 0 ? (256 + signedSpeed) & 0xFF : signedSpeed & 0xFF;
-
-            const buffer = new ArrayBuffer(14);
-            const view = new DataView(buffer);
-
-            view.setUint8(0, 0x0E);       // Длина пакета (14 байт)
-            view.setUint8(1, 0x00);       // Hub ID
-            view.setUint8(2, 0x81);       // Port Output Command
-            view.setUint8(3, portId);     // Порт (0x00=A, 0x01=B, 0x02=C)
-            view.setUint8(4, 0x11);       // Выполнить немедленно
-            view.setUint8(5, 0x0B);       // Sub-command: StartSpeedForDegrees
-            view.setUint32(6, absDegrees, true); // Угол в градусах (Little Endian)
-            view.setUint8(10, speedByte); // Скорость со знаком (-100..100)
-            view.setUint8(11, maxPower);  // Максимальная мощность (0..100)
-            view.setUint8(12, endState);  // Состояние по завершении (127 = Brake / удержание)
-            view.setUint8(13, 0x00);      // Профиль разгона/торможения
-
-            return new Uint8Array(buffer);
-        }
-
-        // Пакет экстренной остановки порта (StartPower = 0x00)
-        function buildStopPortPacket(portId) {
-            return new Uint8Array([0x08, 0x00, 0x81, portId, 0x11, 0x51, 0x00, 0x00]);
-        }
-
-        // =========================================================================
-        // ЭКСТРЕННАЯ ОСТАНОВКА (КРАСНЫЙ ВОСЬМИУГОЛЬНИК STOP)
-        // =========================================================================
-        document.getElementById('btnStop').addEventListener('click', async () => {
-            emergencyStopped = true;
-            appendLog('!!! АВАРИЙНАЯ ОСТАНОВКА ВСЕХ ПОРТОВ (STOP) !!!', 'err');
-            showToast('СТОП! Все моторы остановлены.');
-
-            for (const [name, portId] of Object.entries(PORTS)) {
-                const stopPkt = buildStopPortPacket(portId);
-                if (connectionState === 'connected' && bleCharacteristic) {
-                    try {
-                        await bleCharacteristic.writeValue(stopPkt);
-                    } catch (e) {
-                        // Игнорируем ошибки очереди при экстренной остановке
-                    }
-                }
-            }
+        rangeSpeedA.addEventListener('input', (e) => {
+            setSpeedA(parseInt(e.target.value, 10));
         });
 
-        // =========================================================================
-        // УПРАВЛЕНИЕ МОТОРАМИ A, B, C (С ИНВЕРТИРОВАННЫМИ НАПРАВЛЕНИЯМИ ПО УМОЛЧАНИЮ)
-        // =========================================================================
-        function applyInversion(portLetter, rawDegrees) {
-            const checkbox = document.getElementById(`inv${portLetter}`);
-            // Базовые углы в коде ниже уже заданы для исправленной механики (когда галочка "Инверсия" включена).
-            // Если пользователь снимет галочку, знак переключится обратно на исходный.
-            const isInvertedChecked = checkbox ? checkbox.checked : true;
-            return isInvertedChecked ? rawDegrees : -rawDegrees;
-        }
+        // Загружаем сохраненные настройки Порта A при старте
+        loadPortAConfig();
 
-        async function runMotorDegrees(portLetter, rawDegrees, speed, label) {
-            emergencyStopped = false;
-            const finalDegrees = applyInversion(portLetter, rawDegrees);
-            const packet = buildStartSpeedForDegreesPacket(PORTS[portLetter], finalDegrees, speed);
-            await sendLwpPacket(packet, `${portLetter}: ${label} (${finalDegrees > 0 ? '+' : ''}${finalDegrees}°)`);
-        }
-
-        // --- МОТОР A: ВЕРТИКАЛЬНЫЙ ТОЛКАТЕЛЬ ---
-        // Ранее было +105 / -105, теперь инвертировано: Толкнуть = -105°, Вернуть = +105°
+        // Инвертированное базовое направление: Толкнуть = -amplitude, Вернуть = +amplitude
         function pushPusher() {
-            runMotorDegrees('A', -105, 65, 'Толкнуть');
+            runMotorDegrees('A', -portAConfig.amplitude, portAConfig.speed, `Толкнуть (${portAConfig.speed}%)`);
         }
 
         function returnPusher() {
-            runMotorDegrees('A', 105, 55, 'Вернуть');
+            // Возврат выполняем на чуть более контролируемой скорости (не ниже 60%), чтобы не ударять ограничитель
+            const returnSpeed = Math.max(60, Math.round(portAConfig.speed * 0.85));
+            runMotorDegrees('A', portAConfig.amplitude, returnSpeed, `Вернуть (${returnSpeed}%)`);
         }
 
         async function testCyclePusher() {
             emergencyStopped = false;
-            appendLog('Запуск тестового цикла толкателя: Толкнуть -> Вернуть', 'warn');
-            await runMotorDegrees('A', -105, 65, 'Цикл: Толкнуть');
-            await new Promise(r => setTimeout(r, 650));
+            const amp = portAConfig.amplitude;
+            const spd = portAConfig.speed;
+            const pause = portAConfig.pauseMs;
+            const returnSpeed = Math.max(60, Math.round(spd * 0.85));
+
+            appendLog(`Цикл толкателя: амплитуда ${amp}°, скорость ${spd}%, пауза ${pause} мс`, 'warn');
+            await runMotorDegrees('A', -amp, spd, `Цикл: Толкнуть (${spd}%)`);
+
+            // Ориентировочное время хода + заданная пользователем пауза в верхней точке
+            const estimatedTravelMs = Math.max(140, Math.round((amp / (spd * 4.5)) * 1000));
+            await new Promise(r => setTimeout(r, estimatedTravelMs + pause));
+
             if (emergencyStopped) return;
-            await runMotorDegrees('A', 105, 55, 'Цикл: Вернуть');
+            await runMotorDegrees('A', amp, returnSpeed, `Цикл: Вернуть (${returnSpeed}%)`);
         }
 
         // --- МОТОР B: КЛЕШНЯ-ФИКСАТОР ---
