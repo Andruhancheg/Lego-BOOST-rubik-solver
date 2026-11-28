@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LEGO Boost Rubik's Cube Solver v0.14</title>
+  <title>LEGO Boost Rubik's Cube Solver v0.15</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -106,7 +106,7 @@
   <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-3 pt-1.5 pb-2.5">
     <!-- Строка версии выше кнопки STOP -->
     <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1.5 px-1">
-      <span id="appVersion" class="text-sky-400 font-bold">v0.14</span>
+      <span id="appVersion" class="text-sky-400 font-bold">v0.15</span>
       <span id="jsStatus" class="text-emerald-400">SYSTEM: READY</span>
     </div>
 
@@ -584,13 +584,13 @@
       };
 
       try {
-        const saved = localStorage.getItem("lego_rubik_cfg_v014");
+        const saved = localStorage.getItem("lego_rubik_cfg_v015");
         if (saved) Object.assign(state.config, JSON.parse(saved));
       } catch (e) {}
 
       function saveConfig() {
         try {
-          localStorage.setItem("lego_rubik_cfg_v014", JSON.stringify(state.config));
+          localStorage.setItem("lego_rubik_cfg_v015", JSON.stringify(state.config));
         } catch (e) {}
       }
 
@@ -1476,9 +1476,8 @@
             state.scanIndex = nextIndex;
             state.activeFace = nextFace;
             renderAllCubeViews();
-            setScanStatusText(`Записана грань [${currentFace}]. Переворот кубика на сторону [${nextFace}]...`, "info");
+            setScanStatusText(`Записана грань [${currentFace}]. Подсвечена [${nextFace}] — переворот кубика...`, "info");
 
-            // Поворачиваем площадку на -90° для боковых/нижней грани и опрокидываем (фронт F идет вверх U)
             if (nextFace !== "F") {
               await window.rotatePlatformC(-1);
               if (state.emergencyStop) return;
@@ -1504,15 +1503,11 @@
         }
       };
 
+      // Записывает текущую грань без переключения подсветки на следующую сторону
       window.captureCurrentFace = function () {
         const sampled = sampleVideoGrid() || state.liveColors;
         state.cubeNet[state.activeFace] = sampled.slice();
         logMsg(`Грань ${state.activeFace} считана: ${sampled.join("")}`);
-
-        const nextUnfilled = SCAN_ORDER.find(f => state.cubeNet[f].includes("X"));
-        if (nextUnfilled) {
-          state.activeFace = nextUnfilled;
-        }
 
         renderAllCubeViews();
         updatePlannedStepsFromCube();
