@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LEGO Boost Rubik's Cube Solver v0.18</title>
+  <title>LEGO Boost Rubik's Cube Solver v0.19</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -108,8 +108,8 @@
   <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
   <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-3 pt-1.5 pb-2.5">
     <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1.5 px-1">
-      <span id="appVersion" class="text-sky-400 font-bold">v0.18</span>
-      <span id="jsStatus" class="text-emerald-400">SYSTEM: READY (CLAW 85° + LOCKED FACES)</span>
+      <span id="appVersion" class="text-sky-400 font-bold">v0.19</span>
+      <span id="jsStatus" class="text-emerald-400">SYSTEM: READY (LWP FIX + IMMUTABLE FACES)</span>
     </div>
 
     <div class="flex items-center justify-between gap-2">
@@ -576,10 +576,12 @@
         demoMode: false,
         device: null,
         characteristic: null,
+        bleWriteChain: Promise.resolve(),
         emergencyStop: false,
         autoSolving: false,
         steppingSingle: false,
         scanningStepBusy: false,
+        lastScanClickTs: 0,
         scanIndex: 0,
         scanCompleted: false,
         scannedFaces: { U: false, L: false, F: false, R: false, B: false, D: false },
@@ -592,6 +594,7 @@
         rawCapturedRgb: createFreshRawNet(),
         activeFace: "U",
         clawAngleB: 0,
+        clawAngleUpdatedTs: 0,
         clawCalib: { openPos: null, closedPos: null, calibrated: false },
         plannedSteps: [],
         cubeNet: createFreshNet(),
@@ -603,16 +606,16 @@
       };
 
       try {
-        const saved = localStorage.getItem("lego_rubik_cfg_v018");
+        const saved = localStorage.getItem("lego_rubik_cfg_v019");
         if (saved) Object.assign(state.config, JSON.parse(saved));
       } catch (e) {}
 
-      // Гарантируем стартовый ход клешни 85° при запуске приложения
+      // Стартовый ход клешни при запуске приложения всегда 85°
       state.config.degB = 85;
 
       function saveConfig() {
         try {
-          localStorage.setItem("lego_rubik_cfg_v018", JSON.stringify(state.config));
+          localStorage.setItem("lego_rubik_cfg_v019", JSON.stringify(state.config));
         } catch (e) {}
       }
 
@@ -625,7 +628,7 @@
         const ts = new Date().toLocaleTimeString("ru-RU", { hour12: false });
         line.textContent = "[" + ts + "] " + msg;
         bleLog.prepend(line);
-        if (bleLog.children.length > 60) bleLog.lastChild.remove();
+        if (bleLog.children.length > 70) bleLog.lastChild.remove();
       }
 
       function toHex(bytes) {
@@ -664,11 +667,7 @@
 
       function classifyRgbHsv(r, g, b) {
         const { h, s, v } = rgbToHsv(r, g, b);
-
-        // Белый: низкая насыщенность
         if (s < 0.28 && v > 0.35) return "W";
-
-        // Классификация по цветовому тону (Hue 0..360)
         if (h >= 340 || h < 12) return "R";
         if (h >= 12 && h < 38) return "O";
         if (h >= 38 && h < 75) return "Y";
@@ -734,7 +733,7 @@
             }
             return bestCol;
           });
-          state.cubeNet[f] = Object.freeze ? mapped.slice() : mapped;
+          state.cubeNet[f] = mapped.slice();
         }
 
         logMsg("Выполнена автокалибровка всех 54 наклеек по 6 центрам кубика");
@@ -791,8 +790,10 @@
         const dv = event.target.value;
         if (!dv || dv.byteLength < 4) return;
         const msgType = dv.getUint8(2);
+        // 0x45 = Port Value (Single)
         if (msgType === 0x45 && dv.getUint8(3) === PORTS.B && dv.byteLength >= 8) {
           state.clawAngleB = dv.getInt32(4, true);
+          state.clawAngleUpdatedTs = performance.now();
         }
       }
 
@@ -821,29 +822,46 @@
         }
       }
 
-      // --- КАЛИБРОВКА КЛЕШНИ: ОТКРЫТЬ В УПОР -> ЗАКРЫТЬ В УПОР -> ОТКРЫТЬ НА 85° ---
+      // --- КАЛИБРОВКА КЛЕШНИ (ПОРТ B): ОТКРЫТЬ В УПОР -> ЗАКРЫТЬ В УПОР -> ОТКРЫТЬ НА 85° ---
       async function setMotorPower(portId, power) {
         const clamped = Math.max(-100, Math.min(100, Math.round(power)));
         const pByte = clamped < 0 ? 256 + clamped : clamped;
-        await sendLwpPacket([0x06, 0x00, 0x81, portId, 0x11, 0x51, pByte]);
+        // 0x08 байт: [0x08, 0x00, 0x81, portId, 0x11, 0x51, 0x00, pByte]
+        await sendLwpPacket([0x08, 0x00, 0x81, portId, 0x11, 0x51, 0x00, pByte]);
       }
 
-      async function driveClawUntilStall(power, maxMs = 2800) {
+      async function driveClawUntilStall(power, maxMs = 2200) {
         if (state.demoMode) {
-          await sleep(350);
+          await sleep(450);
           return power > 0 ? 85 : 0;
         }
+        const beforeTs = state.clawAngleUpdatedTs;
         await setMotorPower(PORTS.B, power);
+
+        // Даем мотору минимум 550 мс на старт и преодоление люфта до проверки упора
+        await sleep(550);
+        if (state.emergencyStop) {
+          await setMotorPower(PORTS.B, 0);
+          return state.clawAngleB;
+        }
+
+        // Если хаб не присылает энкодер (beforeTs не обновился), крутим фиксированное время до упора
+        if (state.clawAngleUpdatedTs === beforeTs) {
+          await sleep(950);
+          await setMotorPower(PORTS.B, 0);
+          return state.clawAngleB;
+        }
+
         const startTs = performance.now();
         let prevAngle = state.clawAngleB;
         let stallTs = null;
 
         while (!state.emergencyStop && (performance.now() - startTs) < maxMs) {
-          await sleep(75);
+          await sleep(80);
           const cur = state.clawAngleB;
           if (Math.abs(cur - prevAngle) <= 2) {
             if (stallTs === null) stallTs = performance.now();
-            if ((performance.now() - stallTs) >= 280) {
+            if ((performance.now() - stallTs) >= 260) {
               await setMotorPower(PORTS.B, 0);
               return cur;
             }
@@ -860,31 +878,32 @@
         if (state.btStatus !== "connected" || state.emergencyStop) return;
         const hubStatusText = $("hubStatusText");
         const clawCalibInfo = $("clawCalibInfo");
-        logMsg("Клешня (Порт B): старт калибровки (открытие → закрытие → открытие на 85°)...");
+        logMsg("Клешня (Порт B): запуск калибровки (открытие → закрытие → открытие на 85°)...");
         if (hubStatusText) hubStatusText.textContent = "Калибровка клешни...";
         if (clawCalibInfo) clawCalibInfo.textContent = "1/3 Открытие в упор...";
 
         try {
           if (!state.demoMode && state.characteristic) {
-            await sendLwpPacket([0x0a, 0x00, 0x41, PORTS.B, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01]);
-            await sleep(150);
+            // Корректный 10-байтовый пакет Port Input Format Setup (Single) для Mode 2 (POS) порта B
+            await sendLwpPacket([0x0a, 0x00, 0x41, PORTS.B, 0x02, 0x01, 0x00, 0x00, 0x00, 0x01]);
+            await sleep(200);
           }
 
           const dirSign = state.config.invB ? -1 : 1;
-          const calPower = 35;
+          const calPower = 38;
 
-          // 1. Полное открытие до упора
-          const openPos = await driveClawUntilStall(-dirSign * calPower, 2800);
+          // 1. Открываем до упора
+          const openPos = await driveClawUntilStall(-dirSign * calPower, 2200);
           if (state.emergencyStop) return;
-          await sleep(200);
+          await sleep(250);
 
-          // 2. Полное закрытие до упора
+          // 2. Закрываем до упора
           if (clawCalibInfo) clawCalibInfo.textContent = "2/3 Закрытие в упор...";
-          const closedPos = await driveClawUntilStall(dirSign * calPower, 2800);
+          const closedPos = await driveClawUntilStall(dirSign * calPower, 2200);
           if (state.emergencyStop) return;
-          await sleep(200);
+          await sleep(250);
 
-          // 3. Открытие из закрытого крайнего положения ровно на 85°
+          // 3. Открываем из закрытого положения на 85°
           const targetOpenDeg = 85;
           state.clawCalib = { openPos, closedPos, calibrated: true };
           state.config.degB = targetOpenDeg;
@@ -1003,15 +1022,21 @@
         }
       };
 
-      async function sendLwpPacket(bytes) {
+      // Последовательная очередь записи пакетов BLE, чтобы пакеты не терялись при быстрой отправке
+      function sendLwpPacket(bytes) {
         const packet = new Uint8Array(bytes);
         logMsg("TX -> " + toHex(packet));
-        if (state.demoMode || !state.characteristic) return;
-        try {
-          await state.characteristic.writeValue(packet);
-        } catch (e) {
-          logMsg("Ошибка TX: " + e.message);
-        }
+        if (state.demoMode || !state.characteristic) return Promise.resolve();
+
+        state.bleWriteChain = state.bleWriteChain
+          .then(async () => {
+            if (!state.characteristic) return;
+            await state.characteristic.writeValue(packet);
+          })
+          .catch((e) => {
+            logMsg("Ошибка TX: " + e.message);
+          });
+        return state.bleWriteChain;
       }
 
       function sleep(ms) {
@@ -1034,7 +1059,7 @@
 
         const cmd = [0x0e, 0x00, 0x81, portId, 0x11, 0x0b, d0, d1, d2, d3, speedByte, 0x64, 0x7f, 0x00];
         await sendLwpPacket(cmd);
-        const estMs = Math.min(2500, Math.max(260, Math.round((absDeg / Math.max(20, Math.abs(speed))) * 240)));
+        const estMs = Math.min(2500, Math.max(300, Math.round((absDeg / Math.max(20, Math.abs(speed))) * 250)));
         await sleep(estMs);
       }
 
@@ -1049,7 +1074,7 @@
 
         const allPorts = [PORTS.A, PORTS.B, PORTS.C, PORTS.D, 0x39, 0x3a];
         for (const p of allPorts) {
-          await sendLwpPacket([0x06, 0x00, 0x81, p, 0x00, 0x51, 0x00]);
+          await sendLwpPacket([0x08, 0x00, 0x81, p, 0x00, 0x51, 0x00, 0x00]);
         }
         const stage = $("autoStageText");
         if (stage) stage.textContent = "Остановлено кнопкой STOP";
@@ -1060,7 +1085,7 @@
       window.flipCubeCycle = async () => {
         state.emergencyStop = false;
         await window.pushTrolleyA();
-        await sleep(140);
+        await sleep(150);
         await window.retractTrolleyA();
       };
 
@@ -1189,15 +1214,18 @@
       function startLivePreviewLoop() {
         if (state.liveTimer) clearInterval(state.liveTimer);
         state.liveTimer = setInterval(() => {
-          // Не сэмплируем в момент переворота кубика моторами
           if (!state.scanningStepBusy) {
             sampleVideoGrid();
           }
-        }, 220);
+        }, 250);
       }
 
-      function commitFaceColors(faceKey, colorsArr, rawRgbArr) {
-        if (!state.cubeNet[faceKey]) return;
+      function commitFaceColors(faceKey, colorsArr, rawRgbArr, allowOverwrite = false) {
+        if (!state.cubeNet[faceKey]) return false;
+        // Жесткая защита: уже зафиксированная грань не перезаписывается сама по себе
+        if (state.scannedFaces[faceKey] && !allowOverwrite) {
+          return false;
+        }
         const frozenColors = Array.from({ length: 9 }, (_, i) => {
           const val = colorsArr && colorsArr[i];
           return COLORS[val] ? val : "X";
@@ -1207,6 +1235,7 @@
         if (Array.isArray(rawRgbArr) && rawRgbArr.length === 9) {
           state.rawCapturedRgb[faceKey] = rawRgbArr.map((c) => (Array.isArray(c) ? c.slice() : [128, 128, 128]));
         }
+        return true;
       }
 
       // --- МОДЕЛЬ КУБИКА, РЕШАТЕЛЬ И ГЕНЕРАЦИЯ ШАГОВ ПОД ВЕРХНЮЮ КАМЕРУ ---
@@ -1590,6 +1619,10 @@
 
       // Пошаговое сканирование 6 граней начиная с верхней U
       window.playScanStep = async function () {
+        const now = performance.now();
+        if (now - state.lastScanClickTs < 700) return;
+        state.lastScanClickTs = now;
+
         if (state.scanningStepBusy || state.autoSolving || state.steppingSingle) return;
 
         if (state.scanCompleted) {
@@ -1601,19 +1634,29 @@
         state.scanningStepBusy = true;
 
         try {
-          const currentFace = SCAN_ORDER[state.scanIndex];
+          // Определяем первую еще не отсканированную грань по порядку SCAN_ORDER
+          let targetIdx = state.scanIndex;
+          if (state.scannedFaces[SCAN_ORDER[targetIdx]]) {
+            const firstUnscanned = SCAN_ORDER.findIndex((f) => !state.scannedFaces[f]);
+            if (firstUnscanned === -1) {
+              state.scanCompleted = true;
+              return;
+            }
+            targetIdx = firstUnscanned;
+            state.scanIndex = targetIdx;
+          }
+
+          const currentFace = SCAN_ORDER[targetIdx];
           state.activeFace = currentFace;
 
-          // Снимаем и жестко замораживаем текущую грань ДО любого движения моторов
+          // Снимаем и жестко блокируем текущую грань ДО движения моторов
           const snap = sampleVideoGrid();
-          const frozenColors = snap.colors.slice();
-          const frozenRaw = snap.rawRgb.map((c) => c.slice());
-          commitFaceColors(currentFace, frozenColors, frozenRaw);
-          logMsg(`Сканирование [${state.scanIndex + 1}/6]: зафиксирована грань ${currentFace} (${state.cubeNet[currentFace].join("")})`);
+          commitFaceColors(currentFace, snap.colors.slice(), snap.rawRgb.map((c) => c.slice()), false);
+          logMsg(`Сканирование [${targetIdx + 1}/6]: зафиксирована грань ${currentFace} (${state.cubeNet[currentFace].join("")})`);
           renderAllCubeViews();
 
-          if (state.scanIndex < SCAN_ORDER.length - 1) {
-            const nextIndex = state.scanIndex + 1;
+          if (targetIdx < SCAN_ORDER.length - 1) {
+            const nextIndex = targetIdx + 1;
             const nextFace = SCAN_ORDER[nextIndex];
             state.scanIndex = nextIndex;
             state.activeFace = nextFace;
@@ -1623,19 +1666,17 @@
             if (nextFace !== "F") {
               await window.rotatePlatformC(-1);
               if (state.emergencyStop) return;
-              await sleep(150);
+              await sleep(160);
             }
             await window.flipCubeCycle();
             if (state.emergencyStop) return;
             await sleep(450);
 
-            // Обновляем только живой прицел поверх видео, не трогая state.cubeNet
             sampleVideoGrid();
-
             setScanStatusText(`Грань [${nextFace}] (${nextIndex + 1}/6) под камерой. Нажмите «Плэй / Шаг» для записи.`, "info");
           } else {
             state.scanCompleted = true;
-            setScanStatusText("Все 6 сторон записаны. Калибровка цветов по 6 центрам и проверка...", "info");
+            setScanStatusText("Все 6 сторон записаны. Калибровка цветов по 6 центрам...", "info");
 
             recalibrateAllFacesByCenters();
             renderAllCubeViews();
@@ -1660,8 +1701,9 @@
         if (state.scanningStepBusy) return;
         const targetFace = state.activeFace;
         const snap = sampleVideoGrid();
-        commitFaceColors(targetFace, snap.colors.slice(), snap.rawRgb.map((c) => c.slice()));
-        logMsg(`Грань ${targetFace} считана: ${state.cubeNet[targetFace].join("")}`);
+        // Ручное нажатие «Считать в грань» явно разрешает перезапись выбранной грани
+        commitFaceColors(targetFace, snap.colors.slice(), snap.rawRgb.map((c) => c.slice()), true);
+        logMsg(`Грань ${targetFace} считана вручную: ${state.cubeNet[targetFace].join("")}`);
 
         renderAllCubeViews();
         updatePlannedStepsFromCube();
