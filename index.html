@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LEGO Boost Rubik's Cube Solver v0.13</title>
+  <title>LEGO Boost Rubik's Cube Solver v0.14</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -106,7 +106,7 @@
   <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-3 pt-1.5 pb-2.5">
     <!-- Строка версии выше кнопки STOP -->
     <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1.5 px-1">
-      <span id="appVersion" class="text-sky-400 font-bold">v0.13</span>
+      <span id="appVersion" class="text-sky-400 font-bold">v0.14</span>
       <span id="jsStatus" class="text-emerald-400">SYSTEM: READY</span>
     </div>
 
@@ -219,12 +219,24 @@
 
     <!-- БЛОК 2: РАЗВЕРТКА ВСЕХ 6 ГРАНЕЙ КУБИКА НА ПЛОСКОСТИ -->
     <section class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg space-y-3">
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between gap-2">
         <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">2. Развертка граней (54)</h2>
-        <button id="btnClearNet" type="button" onclick="window.clearCubeNet()"
-          class="text-xs text-rose-400 hover:text-rose-300 underline cursor-pointer">
-          Очистить всё
-        </button>
+        <div class="flex items-center gap-2">
+          <button id="btnScanPlayStep" type="button" onclick="window.playScanStep()"
+            class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-extrabold text-xs shadow flex items-center gap-1 cursor-pointer">
+            <span class="no-ptr">⏭</span>
+            <span class="no-ptr">Плэй / Шаг</span>
+          </button>
+          <button id="btnClearNet" type="button" onclick="window.clearCubeNet()"
+            class="text-xs text-rose-400 hover:text-rose-300 underline cursor-pointer">
+            Очистить всё
+          </button>
+        </div>
+      </div>
+
+      <!-- Статус пошагового сканирования всех 6 сторон -->
+      <div id="scanSequenceStatus" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-sky-300 font-medium">
+        Готово к сканированию с верхней грани [U]. Нажмите «Плэй / Шаг» для записи и переворота на следующую сторону.
       </div>
 
       <!-- Схема развертки 4x3 -->
@@ -285,7 +297,7 @@
     </section>
 
     <!-- БЛОК 4: КНОПКИ УПРАВЛЕНИЯ СБОРКОЙ И МОНИТОР ШАГОВ КУБИКА -->
-    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg space-y-3">
+    <section id="solveMonitorSection" class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg space-y-3">
       <div class="flex items-center justify-between">
         <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">4. Сборка и монитор шагов</h2>
         <span id="stepsCountBadge" class="text-[11px] font-mono text-slate-400">0 шагов</span>
@@ -544,6 +556,9 @@
         emergencyStop: false,
         autoSolving: false,
         steppingSingle: false,
+        scanningStepBusy: false,
+        scanIndex: 0,
+        scanCompleted: false,
         isPaused: false,
         mediaStream: null,
         torchOn: false,
@@ -569,13 +584,13 @@
       };
 
       try {
-        const saved = localStorage.getItem("lego_rubik_cfg_v013");
+        const saved = localStorage.getItem("lego_rubik_cfg_v014");
         if (saved) Object.assign(state.config, JSON.parse(saved));
       } catch (e) {}
 
       function saveConfig() {
         try {
-          localStorage.setItem("lego_rubik_cfg_v013", JSON.stringify(state.config));
+          localStorage.setItem("lego_rubik_cfg_v014", JSON.stringify(state.config));
         } catch (e) {}
       }
 
@@ -593,6 +608,16 @@
 
       function toHex(bytes) {
         return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0").toUpperCase()).join(" ");
+      }
+
+      function setScanStatusText(text, tone = "info") {
+        const el = $("scanSequenceStatus");
+        if (!el) return;
+        el.textContent = text;
+        el.classList.remove("text-sky-300", "text-emerald-400", "text-amber-400");
+        if (tone === "done") el.classList.add("text-emerald-400");
+        else if (tone === "warn") el.classList.add("text-amber-400");
+        else el.classList.add("text-sky-300");
       }
 
       function updatePlayPauseUI() {
@@ -893,6 +918,7 @@
         state.emergencyStop = true;
         state.autoSolving = false;
         state.steppingSingle = false;
+        state.scanningStepBusy = false;
         state.isPaused = false;
         updatePlayPauseUI();
         logMsg("!!! STOP: ОСТАНОВКА ВСЕХ ДЕЙСТВИЙ НА ХАБЕ !!!");
@@ -927,6 +953,15 @@
           await rotateMotorDegrees(PORTS.C, -backlash, Math.max(25, state.config.spdC - 15), state.config.invC);
         }
       };
+
+      async function wigglePlatform45C() {
+        if (state.emergencyStop) return;
+        const deg45 = 0.5 * state.config.calib90C * state.config.gearC;
+        await rotateMotorDegrees(PORTS.C, deg45, state.config.spdC, state.config.invC);
+        if (state.emergencyStop) return;
+        await sleep(150);
+        await rotateMotorDegrees(PORTS.C, -deg45, state.config.spdC, state.config.invC);
+      }
 
       // --- КАМЕРА И РАСПОЗНАВАНИЕ ЦВЕТОВ ---
       window.startCamera = async function () {
@@ -1060,13 +1095,13 @@
           [c.L[6], c.L[7], c.L[8]] = [net.B[6], net.B[7], net.B[8]];
         } else if (move === "F") {
           c.F = rotFaceCW(net.F);
-          [c.U[6], c.U[7], c.U[8]] = [net.L[8], net.L[5], net.L[2]];
+          [c.U[6], c.U[7], c.U[8]] = [net.L[8], c.L[5], c.L[2]];
           [c.R[0], c.R[3], c.R[6]] = [net.U[6], net.U[7], net.U[8]];
           [c.D[2], c.D[1], c.D[0]] = [net.R[0], net.R[3], net.R[6]];
           [c.L[8], c.L[5], c.L[2]] = [net.D[0], net.D[1], net.D[2]];
         } else if (move === "B") {
           c.B = rotFaceCW(net.B);
-          [c.U[0], c.U[1], c.U[2]] = [net.R[2], net.R[5], net.R[8]];
+          [c.U[0], c.U[1], c.U[2]] = [net.R[2], c.R[5], c.R[8]];
           [c.L[0], c.L[3], c.L[6]] = [net.U[2], net.U[1], net.U[0]];
           [c.D[6], c.D[7], c.D[8]] = [net.L[0], net.L[3], net.L[6]];
           [c.R[2], c.R[5], c.R[8]] = [net.D[8], net.D[7], net.D[6]];
@@ -1289,12 +1324,14 @@
         return simplifyMoves(fullPath);
       }
 
+      // Тыловая сторона (B) уходит вниз (D), фронтальная (F) поднимается вверх (U)
+      function simPushFlip(o) {
+        return { U: o.F, B: o.U, D: o.B, F: o.D, R: o.R, L: o.L };
+      }
+
       function buildRobotStepsFromMoves(moves) {
         let ori = { U: "U", D: "D", F: "F", B: "B", R: "R", L: "L" };
 
-        function simPushFlip(o) {
-          return { U: o.B, F: o.U, D: o.F, B: o.D, R: o.R, L: o.L };
-        }
         function simRotateCW(o) {
           return { U: o.U, D: o.D, F: o.R, R: o.B, B: o.L, L: o.F };
         }
@@ -1411,6 +1448,62 @@
         logMsg(`Рассчитан план сборки: ${state.plannedSteps.length} шагов`);
       }
 
+      // Пошаговое сканирование 6 граней начиная с верхней U:
+      // записывает текущую грань -> подсвечивает следующую -> переворачивает кубик моторами на следующую сторону
+      window.playScanStep = async function () {
+        if (state.scanningStepBusy || state.autoSolving || state.steppingSingle) return;
+        state.emergencyStop = false;
+        state.scanningStepBusy = true;
+
+        try {
+          if (state.scanCompleted) {
+            state.scanIndex = 0;
+            state.scanCompleted = false;
+          }
+
+          const currentFace = SCAN_ORDER[state.scanIndex];
+          state.activeFace = currentFace;
+          renderAllCubeViews();
+
+          const sampled = sampleVideoGrid() || state.liveColors;
+          state.cubeNet[currentFace] = sampled.slice();
+          logMsg(`Сканирование [${state.scanIndex + 1}/6]: записана грань ${currentFace} (${sampled.join("")})`);
+          renderAllCubeViews();
+
+          if (state.scanIndex < SCAN_ORDER.length - 1) {
+            const nextIndex = state.scanIndex + 1;
+            const nextFace = SCAN_ORDER[nextIndex];
+            state.scanIndex = nextIndex;
+            state.activeFace = nextFace;
+            renderAllCubeViews();
+            setScanStatusText(`Записана грань [${currentFace}]. Переворот кубика на сторону [${nextFace}]...`, "info");
+
+            // Поворачиваем площадку на -90° для боковых/нижней грани и опрокидываем (фронт F идет вверх U)
+            if (nextFace !== "F") {
+              await window.rotatePlatformC(-1);
+              if (state.emergencyStop) return;
+              await sleep(120);
+            }
+            await window.flipCubeCycle();
+            if (state.emergencyStop) return;
+
+            setScanStatusText(`Грань [${nextFace}] подсвечена и подведена под камеру. Нажмите «Плэй / Шаг» для записи.`, "info");
+          } else {
+            state.scanCompleted = true;
+            setScanStatusText("Все 6 сторон записаны. Поворот площадки на 45° туда-обратно...", "info");
+            await wigglePlatform45C();
+            if (state.emergencyStop) return;
+
+            updatePlannedStepsFromCube();
+            const msg = "Все стороны отсканированы! Можно переходить к разделу «4. Сборка и монитор шагов».";
+            setScanStatusText(msg, "done");
+            logMsg(msg);
+          }
+        } finally {
+          state.scanningStepBusy = false;
+        }
+      };
+
       window.captureCurrentFace = function () {
         const sampled = sampleVideoGrid() || state.liveColors;
         state.cubeNet[state.activeFace] = sampled.slice();
@@ -1436,6 +1529,8 @@
         };
         demo = applyAlg(demo, "R U R' U' F2 D' L");
         state.cubeNet = demo;
+        state.scanIndex = 0;
+        state.scanCompleted = false;
         renderAllCubeViews();
         updatePlannedStepsFromCube();
         logMsg("Заполнена тестовая развертка и рассчитаны шаги сборки");
@@ -1446,7 +1541,10 @@
           state.cubeNet[f] = Array(9).fill("X");
         }
         state.activeFace = "U";
+        state.scanIndex = 0;
+        state.scanCompleted = false;
         state.plannedSteps = [];
+        setScanStatusText("Готово к сканированию с верхней грани [U]. Нажмите «Плэй / Шаг» для записи и переворота на следующую сторону.", "info");
         renderAllCubeViews();
         renderStepsMonitor();
         const movesBox = $("solveMovesDisplay");
@@ -1528,7 +1626,7 @@
 
       // Выполнение одного ближайшего невыполненного шага с сохранением прогресса
       window.runSingleStepSolve = async function () {
-        if (state.autoSolving || state.steppingSingle) return;
+        if (state.autoSolving || state.steppingSingle || state.scanningStepBusy) return;
         state.emergencyStop = false;
         state.isPaused = false;
 
@@ -1589,7 +1687,7 @@
       };
 
       window.runAutoSolvePipeline = async function () {
-        if (state.steppingSingle) return;
+        if (state.steppingSingle || state.scanningStepBusy) return;
         if (state.autoSolving) {
           if (state.isPaused) {
             state.isPaused = false;
@@ -1714,6 +1812,8 @@
       document.querySelectorAll(".face-box").forEach((box) => {
         box.addEventListener("click", () => {
           state.activeFace = box.dataset.face;
+          const idx = SCAN_ORDER.indexOf(state.activeFace);
+          if (idx !== -1 && !state.scanCompleted) state.scanIndex = idx;
           renderAllCubeViews();
         });
       });
