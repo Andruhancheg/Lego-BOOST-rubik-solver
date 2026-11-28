@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LEGO Boost Rubik's Cube Solver v0.17</title>
+  <title>LEGO Boost Rubik's Cube Solver v0.18</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -108,8 +108,8 @@
   <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
   <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-3 pt-1.5 pb-2.5">
     <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1.5 px-1">
-      <span id="appVersion" class="text-sky-400 font-bold">v0.17</span>
-      <span id="jsStatus" class="text-emerald-400">SYSTEM: READY (HSV + 6-CENTER CAL)</span>
+      <span id="appVersion" class="text-sky-400 font-bold">v0.18</span>
+      <span id="jsStatus" class="text-emerald-400">SYSTEM: READY (CLAW 85° + LOCKED FACES)</span>
     </div>
 
     <div class="flex items-center justify-between gap-2">
@@ -427,9 +427,9 @@
           <div>
             <div class="flex justify-between text-slate-300 mb-1">
               <span>Ход клешни (угол):</span>
-              <span id="valDegB" class="font-mono text-sky-400 font-bold">95°</span>
+              <span id="valDegB" class="font-mono text-sky-400 font-bold">85°</span>
             </div>
-            <input id="rangeDegB" type="range" min="20" max="180" step="1" value="95" class="w-full accent-sky-500" />
+            <input id="rangeDegB" type="range" min="20" max="180" step="1" value="85" class="w-full accent-sky-500" />
           </div>
           <div>
             <div class="flex justify-between text-slate-300 mb-1">
@@ -443,6 +443,7 @@
         <div class="grid grid-cols-2 gap-2 text-xs font-bold">
           <button id="btnClampB" type="button" onclick="window.clampClawB()" class="py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white">Зажать</button>
           <button id="btnReleaseB" type="button" onclick="window.releaseClawB()" class="py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white">Разжать</button>
+          <button id="btnRecalibB" type="button" onclick="window.calibrateClawByResistance()" class="col-span-2 py-2 rounded-xl bg-indigo-700 hover:bg-indigo-600 text-white">Калибровка: Открыть → Закрыть → Открыть на 85°</button>
         </div>
         <div class="grid grid-cols-4 gap-1.5 text-xs font-mono">
           <button type="button" class="nudge-btn py-1.5 rounded bg-slate-800 hover:bg-slate-700" data-port="B" data-delta="-10">-10°</button>
@@ -596,19 +597,22 @@
         cubeNet: createFreshNet(),
         config: {
           invA: true, degA: 85, spdA: 85,
-          invB: true, degB: 95, spdB: 25,
+          invB: true, degB: 85, spdB: 25,
           invC: true, gearC: 1, calib90C: 90, backlashC: 20, spdC: 25
         }
       };
 
       try {
-        const saved = localStorage.getItem("lego_rubik_cfg_v017");
+        const saved = localStorage.getItem("lego_rubik_cfg_v018");
         if (saved) Object.assign(state.config, JSON.parse(saved));
       } catch (e) {}
 
+      // Гарантируем стартовый ход клешни 85° при запуске приложения
+      state.config.degB = 85;
+
       function saveConfig() {
         try {
-          localStorage.setItem("lego_rubik_cfg_v017", JSON.stringify(state.config));
+          localStorage.setItem("lego_rubik_cfg_v018", JSON.stringify(state.config));
         } catch (e) {}
       }
 
@@ -661,7 +665,7 @@
       function classifyRgbHsv(r, g, b) {
         const { h, s, v } = rgbToHsv(r, g, b);
 
-        // Белый: низкая насыщенность (даже если камера слегка ушла в зеленый/синий оттенок)
+        // Белый: низкая насыщенность
         if (s < 0.28 && v > 0.35) return "W";
 
         // Классификация по цветовому тону (Hue 0..360)
@@ -673,30 +677,25 @@
         return "R";
       }
 
-      // Автокалибровка всех 54 клеток по 6 реальным центрам после завершения сканирования 6 граней
       function recalibrateAllFacesByCenters() {
         const faces = ["U", "F", "R", "B", "L", "D"];
         if (!faces.every((f) => Array.isArray(state.rawCapturedRgb[f]) && state.rawCapturedRgb[f].length === 9)) {
           return false;
         }
 
-        // Собираем 6 центральных RGB (индекс 4)
         const centers = faces.map((f) => {
           const rgb = state.rawCapturedRgb[f][4];
           const hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
           return { face: f, rgb, hsv };
         });
 
-        // Белый центр — тот, у которого минимальная насыщенность S
         let whiteCenter = centers[0];
         for (const c of centers) {
           if (c.hsv.s < whiteCenter.hsv.s) whiteCenter = c;
         }
         whiteCenter.assignedColor = "W";
 
-        // Оставшиеся 5 центров сортируем по Hue и сопоставляем с R -> O -> Y -> G -> B
         const chromatic = centers.filter((c) => c !== whiteCenter);
-        // Сдвигаем Hue красного (340..360 -> -20..0), чтобы порядок по кругу был R, O, Y, G, B
         const normHue = (h) => (h >= 330 ? h - 360 : h);
         chromatic.sort((a, b) => normHue(a.hsv.h) - normHue(b.hsv.h));
 
@@ -705,7 +704,6 @@
           c.assignedColor = hueOrder[idx];
         });
 
-        // Теперь каждую из 54 клеток привязываем к ближайшему из 6 откалиброванных центров
         const hueDist = (h1, h2) => {
           const d = Math.abs(h1 - h2);
           return Math.min(d, 360 - d);
@@ -719,7 +717,6 @@
               return own ? own.assignedColor : classifyRgbHsv(rgb[0], rgb[1], rgb[2]);
             }
             const hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
-            // Если насыщенность близка к белому центру и намного ниже цветных
             if (hsv.s <= whiteCenter.hsv.s + 0.14 && hsv.s < 0.34) {
               return "W";
             }
@@ -737,7 +734,7 @@
             }
             return bestCol;
           });
-          state.cubeNet[f] = mapped;
+          state.cubeNet[f] = Object.freeze ? mapped.slice() : mapped;
         }
 
         logMsg("Выполнена автокалибровка всех 54 наклеек по 6 центрам кубика");
@@ -824,6 +821,7 @@
         }
       }
 
+      // --- КАЛИБРОВКА КЛЕШНИ: ОТКРЫТЬ В УПОР -> ЗАКРЫТЬ В УПОР -> ОТКРЫТЬ НА 85° ---
       async function setMotorPower(portId, power) {
         const clamped = Math.max(-100, Math.min(100, Math.round(power)));
         const pByte = clamped < 0 ? 256 + clamped : clamped;
@@ -833,7 +831,7 @@
       async function driveClawUntilStall(power, maxMs = 2800) {
         if (state.demoMode) {
           await sleep(350);
-          return power > 0 ? 95 : 0;
+          return power > 0 ? 85 : 0;
         }
         await setMotorPower(PORTS.B, power);
         const startTs = performance.now();
@@ -862,9 +860,9 @@
         if (state.btStatus !== "connected" || state.emergencyStop) return;
         const hubStatusText = $("hubStatusText");
         const clawCalibInfo = $("clawCalibInfo");
-        logMsg("Клешня (Порт B): автокалибровка крайних положений...");
+        logMsg("Клешня (Порт B): старт калибровки (открытие → закрытие → открытие на 85°)...");
         if (hubStatusText) hubStatusText.textContent = "Калибровка клешни...";
-        if (clawCalibInfo) clawCalibInfo.textContent = "Поиск упоров...";
+        if (clawCalibInfo) clawCalibInfo.textContent = "1/3 Открытие в упор...";
 
         try {
           if (!state.demoMode && state.characteristic) {
@@ -875,28 +873,33 @@
           const dirSign = state.config.invB ? -1 : 1;
           const calPower = 35;
 
+          // 1. Полное открытие до упора
           const openPos = await driveClawUntilStall(-dirSign * calPower, 2800);
           if (state.emergencyStop) return;
-          await sleep(180);
+          await sleep(200);
 
+          // 2. Полное закрытие до упора
+          if (clawCalibInfo) clawCalibInfo.textContent = "2/3 Закрытие в упор...";
           const closedPos = await driveClawUntilStall(dirSign * calPower, 2800);
           if (state.emergencyStop) return;
+          await sleep(200);
 
-          const travelDeg = Math.max(20, Math.min(180, Math.abs(closedPos - openPos)));
+          // 3. Открытие из закрытого крайнего положения ровно на 85°
+          const targetOpenDeg = 85;
           state.clawCalib = { openPos, closedPos, calibrated: true };
-          state.config.degB = Math.round(travelDeg);
+          state.config.degB = targetOpenDeg;
           saveConfig();
           syncSettingsUI();
 
-          await sleep(150);
-          await rotateMotorDegrees(PORTS.B, -state.config.degB, state.config.spdB, state.config.invB);
+          if (clawCalibInfo) clawCalibInfo.textContent = `3/3 Открытие на ${targetOpenDeg}°...`;
+          await rotateMotorDegrees(PORTS.B, -targetOpenDeg, state.config.spdB, state.config.invB);
 
-          const infoStr = `Упоры: ${openPos}° ↔ ${closedPos}° (ход ${state.config.degB}°)`;
+          const infoStr = `Упоры: ${openPos}° ↔ ${closedPos}° | Старт: открыто на ${targetOpenDeg}°`;
           if (clawCalibInfo) clawCalibInfo.textContent = infoStr;
           if (hubStatusText) {
             hubStatusText.textContent = state.demoMode
-              ? `Демо: клешня откалибрована (${state.config.degB}°)`
-              : `Move Hub готов (клешня ${state.config.degB}°)`;
+              ? `Демо: клешня открыта на ${targetOpenDeg}°`
+              : `Move Hub готов (клешня ${targetOpenDeg}°)`;
           }
           logMsg("Клешня откалибрована: " + infoStr);
         } catch (err) {
@@ -951,7 +954,7 @@
             setBtStatus("connected");
             logMsg("Демо: виртуальный Move Hub подключен");
             await window.calibrateClawByResistance();
-          }, 600);
+          }, 500);
           return;
         }
 
@@ -1143,7 +1146,10 @@
         const video = $("cameraVideo");
         const canvas = $("captureCanvas");
         if (!video || !canvas || video.readyState < 2) {
-          return { colors: state.liveColors.slice(), rawRgb: state.liveRawRgb.slice() };
+          return {
+            colors: state.liveColors.slice(),
+            rawRgb: state.liveRawRgb.map((c) => (c ? c.slice() : [128, 128, 128]))
+          };
         }
         const size = 180;
         canvas.width = size;
@@ -1173,25 +1179,33 @@
           }
         }
         state.liveColors = detected.slice();
-        state.liveRawRgb = rawList.slice();
-        return { colors: detected.slice(), rawRgb: rawList.slice() };
+        state.liveRawRgb = rawList.map((c) => c.slice());
+        return {
+          colors: detected.slice(),
+          rawRgb: rawList.map((c) => c.slice())
+        };
       }
 
       function startLivePreviewLoop() {
         if (state.liveTimer) clearInterval(state.liveTimer);
-        state.liveTimer = setInterval(sampleVideoGrid, 220);
+        state.liveTimer = setInterval(() => {
+          // Не сэмплируем в момент переворота кубика моторами
+          if (!state.scanningStepBusy) {
+            sampleVideoGrid();
+          }
+        }, 220);
       }
 
       function commitFaceColors(faceKey, colorsArr, rawRgbArr) {
         if (!state.cubeNet[faceKey]) return;
-        const safeCopy = Array.from({ length: 9 }, (_, i) => {
+        const frozenColors = Array.from({ length: 9 }, (_, i) => {
           const val = colorsArr && colorsArr[i];
           return COLORS[val] ? val : "X";
         });
-        state.cubeNet[faceKey] = safeCopy;
+        state.cubeNet[faceKey] = frozenColors;
         state.scannedFaces[faceKey] = true;
         if (Array.isArray(rawRgbArr) && rawRgbArr.length === 9) {
-          state.rawCapturedRgb[faceKey] = rawRgbArr.map((c) => (c ? c.slice() : [128, 128, 128]));
+          state.rawCapturedRgb[faceKey] = rawRgbArr.map((c) => (Array.isArray(c) ? c.slice() : [128, 128, 128]));
         }
       }
 
@@ -1578,7 +1592,6 @@
       window.playScanStep = async function () {
         if (state.scanningStepBusy || state.autoSolving || state.steppingSingle) return;
 
-        // Защита от случайного сброса уже отсканированного куба
         if (state.scanCompleted) {
           setScanStatusText("Все 6 сторон уже зафиксированы. Нажмите «Очистить всё», если нужно пересканировать заново.", "done");
           return;
@@ -1590,12 +1603,13 @@
         try {
           const currentFace = SCAN_ORDER[state.scanIndex];
           state.activeFace = currentFace;
-          renderAllCubeViews();
 
-          await sleep(160);
-          const { colors, rawRgb } = sampleVideoGrid();
-          commitFaceColors(currentFace, colors, rawRgb);
-          logMsg(`Сканирование [${state.scanIndex + 1}/6]: записана грань ${currentFace} (${state.cubeNet[currentFace].join("")})`);
+          // Снимаем и жестко замораживаем текущую грань ДО любого движения моторов
+          const snap = sampleVideoGrid();
+          const frozenColors = snap.colors.slice();
+          const frozenRaw = snap.rawRgb.map((c) => c.slice());
+          commitFaceColors(currentFace, frozenColors, frozenRaw);
+          logMsg(`Сканирование [${state.scanIndex + 1}/6]: зафиксирована грань ${currentFace} (${state.cubeNet[currentFace].join("")})`);
           renderAllCubeViews();
 
           if (state.scanIndex < SCAN_ORDER.length - 1) {
@@ -1614,6 +1628,8 @@
             await window.flipCubeCycle();
             if (state.emergencyStop) return;
             await sleep(450);
+
+            // Обновляем только живой прицел поверх видео, не трогая state.cubeNet
             sampleVideoGrid();
 
             setScanStatusText(`Грань [${nextFace}] (${nextIndex + 1}/6) под камерой. Нажмите «Плэй / Шаг» для записи.`, "info");
@@ -1621,7 +1637,6 @@
             state.scanCompleted = true;
             setScanStatusText("Все 6 сторон записаны. Калибровка цветов по 6 центрам и проверка...", "info");
 
-            // Автокалибровка цветов по 6 центрам без затирания массивов случайными значениями
             recalibrateAllFacesByCenters();
             renderAllCubeViews();
 
@@ -1642,9 +1657,10 @@
       };
 
       window.captureCurrentFace = function () {
+        if (state.scanningStepBusy) return;
         const targetFace = state.activeFace;
-        const { colors, rawRgb } = sampleVideoGrid();
-        commitFaceColors(targetFace, colors, rawRgb);
+        const snap = sampleVideoGrid();
+        commitFaceColors(targetFace, snap.colors.slice(), snap.rawRgb.map((c) => c.slice()));
         logMsg(`Грань ${targetFace} считана: ${state.cubeNet[targetFace].join("")}`);
 
         renderAllCubeViews();
