@@ -1,9 +1,10 @@
+<!-- LEGO Boost Rubik's Cube Solver v0.22 -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LEGO Boost Rubik's Cube Solver v0.21</title>
+  <title>LEGO Boost Rubik's Cube Solver v0.22</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -108,8 +109,8 @@
   <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
   <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-3 pt-1.5 pb-2.5">
     <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1.5 px-1">
-      <span id="appVersion" class="text-sky-400 font-bold">v0.21</span>
-      <span id="jsStatus" class="text-emerald-400">SYSTEM: READY (SEPARATE CAPTURE &amp; FLIP)</span>
+      <span id="appVersion" class="text-sky-400 font-bold">v0.22</span>
+      <span id="jsStatus" class="text-emerald-400">SYSTEM: READY (3D SCAN KINEMATICS)</span>
     </div>
 
     <div class="flex items-center justify-between gap-2">
@@ -162,7 +163,7 @@
       <div class="flex items-center justify-between">
         <div>
           <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">1. Камера сканирования</h2>
-          <p class="text-[10px] text-sky-400">HSV-анализ + автобаланс по 6 центрам</p>
+          <p class="text-[10px] text-sky-400">HSV-анализ + автоориентация матрицы 3×3</p>
         </div>
         <div class="flex items-center gap-2">
           <label class="flex items-center gap-1 text-[11px] text-slate-400 cursor-pointer">
@@ -571,6 +572,55 @@
         };
       }
 
+      // 3D-трекер ориентации кубика в процессе сканирования
+      // Хранит какая исходная грань (U,D,F,B,R,L) сейчас находится в каждом слоте
+      // и сколько раз по часовой стрелке (0..3) она повернута относительно своей нормальной ориентации в развертке
+      function createInitialScanPose() {
+        return {
+          U: { face: "U", cw: 0 },
+          D: { face: "D", cw: 0 },
+          F: { face: "F", cw: 0 },
+          B: { face: "B", cw: 0 },
+          R: { face: "R", cw: 0 },
+          L: { face: "L", cw: 0 }
+        };
+      }
+
+      // Толкатель (flipA): F -> U (cw без изм), U -> B (cw+2), B -> D (cw+2), D -> F (cw без изм), R -> R (cw+1), L -> L (cw+3)
+      function poseFlipA(p) {
+        return {
+          U: { face: p.F.face, cw: p.F.cw },
+          B: { face: p.U.face, cw: (p.U.cw + 2) % 4 },
+          D: { face: p.B.face, cw: (p.B.cw + 2) % 4 },
+          F: { face: p.D.face, cw: p.D.cw },
+          R: { face: p.R.face, cw: (p.R.cw + 1) % 4 },
+          L: { face: p.L.face, cw: (p.L.cw + 3) % 4 }
+        };
+      }
+
+      // Поворот платформы вправо +90° (вид сверху против часовой / по часовой):
+      // F -> R -> B -> L -> F (или L -> F -> R -> B -> L). Для сканирования крутим в одну сторону:
+      // При повороте платформы так, что R встает на место F (simRotateCW):
+      function poseRotateCW(p) {
+        return {
+          U: { face: p.U.face, cw: (p.U.cw + 1) % 4 },
+          D: { face: p.D.face, cw: (p.D.cw + 3) % 4 },
+          F: { face: p.R.face, cw: p.R.cw },
+          R: { face: p.B.face, cw: p.B.cw },
+          B: { face: p.L.face, cw: p.L.cw },
+          L: { face: p.F.face, cw: p.F.cw }
+        };
+      }
+
+      function rotateGridCW(arr, times) {
+        let res = arr.slice();
+        const t = ((times % 4) + 4) % 4;
+        for (let i = 0; i < t; i++) {
+          res = [res[6], res[3], res[0], res[7], res[4], res[1], res[8], res[5], res[2]];
+        }
+        return res;
+      }
+
       const state = {
         btStatus: "disconnected",
         demoMode: false,
@@ -583,6 +633,7 @@
         scanningStepBusy: false,
         lastScanClickTs: 0,
         scanIndex: 0,
+        scanPose: createInitialScanPose(),
         scannedFaces: { U: false, L: false, F: false, R: false, B: false, D: false },
         isPaused: false,
         mediaStream: null,
@@ -605,7 +656,7 @@
       };
 
       try {
-        const saved = localStorage.getItem("lego_rubik_cfg_v021");
+        const saved = localStorage.getItem("lego_rubik_cfg_v022");
         if (saved) Object.assign(state.config, JSON.parse(saved));
       } catch (e) {}
 
@@ -613,7 +664,7 @@
 
       function saveConfig() {
         try {
-          localStorage.setItem("lego_rubik_cfg_v021", JSON.stringify(state.config));
+          localStorage.setItem("lego_rubik_cfg_v022", JSON.stringify(state.config));
         } catch (e) {}
       }
 
@@ -1229,18 +1280,41 @@
         return cur;
       }
 
-      function isCubeValid(net) {
+      function getValidationReport(net) {
         const counts = { W: 0, Y: 0, R: 0, O: 0, B: 0, G: 0 };
         let total = 0;
         for (const f of ["U", "R", "F", "D", "L", "B"]) {
           for (const c of net[f]) {
-            if (counts[c] === undefined) return false;
+            if (counts[c] === undefined) {
+              return { valid: false, reason: `Не заполнена грань [${f}]` };
+            }
             counts[c]++;
             total++;
           }
         }
-        const centers = new Set(["U", "R", "F", "D", "L", "B"].map(f => net[f][4]));
-        return total === 54 && COLOR_CYCLE.every(k => counts[k] === 9) && centers.size === 6;
+        const centerMap = {};
+        for (const f of ["U", "R", "F", "D", "L", "B"]) {
+          const col = net[f][4];
+          if (centerMap[col]) {
+            return {
+              valid: false,
+              reason: `Дублируется центр ${col} на гранях [${centerMap[col]}] и [${f}]`
+            };
+          }
+          centerMap[col] = f;
+        }
+        const badColors = COLOR_CYCLE.filter(k => counts[k] !== 9).map(k => `${k}:${counts[k]}`);
+        if (badColors.length) {
+          return {
+            valid: false,
+            reason: `Неверное число цветов (${badColors.join(", ")}, должно быть по 9)`
+          };
+        }
+        return { valid: total === 54, reason: "OK" };
+      }
+
+      function isCubeValid(net) {
+        return getValidationReport(net).valid;
       }
 
       function isSolved(net) {
@@ -1502,7 +1576,8 @@
         }
 
         if (!state.plannedSteps.length) {
-          monitor.innerHTML = `<div class="text-slate-500 text-[11px]">Отсканируйте все 6 граней кубика — здесь появится пошаговый план сборки.</div>`;
+          const rep = getValidationReport(state.cubeNet);
+          monitor.innerHTML = `<div class="text-slate-400 text-[11px]">${rep.reason}</div>`;
           return;
         }
 
@@ -1520,10 +1595,14 @@
 
       function updatePlannedStepsFromCube() {
         const movesBox = $("solveMovesDisplay");
-        if (!isCubeValid(state.cubeNet)) {
+        const report = getValidationReport(state.cubeNet);
+        if (!report.valid) {
           state.plannedSteps = [];
           renderStepsMonitor();
-          if (movesBox) movesBox.classList.add("hidden");
+          if (movesBox) {
+            movesBox.classList.remove("hidden");
+            movesBox.textContent = "Проверка развертки: " + report.reason;
+          }
           return;
         }
 
@@ -1540,8 +1619,8 @@
         logMsg(`Рассчитан план сборки: ${state.plannedSteps.length} шагов`);
       }
 
-      // КНОПКА «ПЛЭЙ / ШАГ»: выполняет ТОЛЬКО механический переворот кубика на следующую грань
-      // и переводит выделение на следующую грань. Цвета в развертке НЕ трогает и НЕ записывает!
+      // КНОПКА «ПЛЭЙ / ШАГ»: 3D-маршрут обхода всех 6 уникальных граней (U -> F -> R -> B -> L -> D)
+      // На каждом шаге подводит под камеру U именно следующую целевую грань без дублирования!
       window.playScanStep = async function () {
         const now = performance.now();
         if (now - state.lastScanClickTs < 1000) return;
@@ -1565,35 +1644,72 @@
             setScanStatusText(`Механический переворот с [${currentFace}] на грань ${nextIdx + 1}/6 [${nextFace}]...`, "info");
             logMsg(`Переворот кубика: [${currentFace}] → [${nextFace}] (${nextIdx + 1}/6)`);
 
-            if (nextFace !== "F") {
-              await window.rotatePlatformC(-1);
-              if (state.emergencyStop) return;
-              await sleep(160);
+            // Ищем в 3D-модели scanPose, в каком слоте сейчас лежит целевая грань nextFace,
+            // и выводим её наверх под камеру (слот U):
+            // Вариант 1: уже на месте фронта (F) -> достаточно flipA
+            // Вариант 2: на месте права (R) -> rotateC(+1) ставит её на F, затем flipA поднимает на U
+            // Вариант 3: на месте лева (L) -> rotateC(-1) ставит её на F, затем flipA поднимает на U
+            // Вариант 4: на месте тыла (B) -> rotateC(2) ставит её на F, затем flipA поднимает на U
+            let guard = 0;
+            while (state.scanPose.U.face !== nextFace && guard < 4) {
+              guard++;
+              if (state.scanPose.F.face === nextFace) {
+                await window.flipCubeCycle();
+                if (state.emergencyStop) return;
+                state.scanPose = poseFlipA(state.scanPose);
+              } else if (state.scanPose.R.face === nextFace) {
+                await window.rotatePlatformC(1);
+                if (state.emergencyStop) return;
+                state.scanPose = poseRotateCW(state.scanPose);
+                await sleep(140);
+                await window.flipCubeCycle();
+                if (state.emergencyStop) return;
+                state.scanPose = poseFlipA(state.scanPose);
+              } else if (state.scanPose.L.face === nextFace) {
+                await window.rotatePlatformC(-1);
+                if (state.emergencyStop) return;
+                state.scanPose = poseRotateCW(poseRotateCW(poseRotateCW(state.scanPose)));
+                await sleep(140);
+                await window.flipCubeCycle();
+                if (state.emergencyStop) return;
+                state.scanPose = poseFlipA(state.scanPose);
+              } else if (state.scanPose.B.face === nextFace) {
+                await window.rotatePlatformC(2);
+                if (state.emergencyStop) return;
+                state.scanPose = poseRotateCW(poseRotateCW(state.scanPose));
+                await sleep(140);
+                await window.flipCubeCycle();
+                if (state.emergencyStop) return;
+                state.scanPose = poseFlipA(state.scanPose);
+              } else if (state.scanPose.D.face === nextFace) {
+                // Если целевая грань снизу (D), один переворот переводит её на B, второй — на U
+                await window.flipCubeCycle();
+                if (state.emergencyStop) return;
+                state.scanPose = poseFlipA(state.scanPose);
+                await sleep(140);
+              }
             }
-            await window.flipCubeCycle();
-            if (state.emergencyStop) return;
-            await sleep(300);
 
+            await sleep(250);
             state.scanIndex = nextIdx;
             state.activeFace = nextFace;
             renderAllCubeViews();
 
             setScanStatusText(
-              `Грань ${nextIdx + 1}/6 [${nextFace}] под камерой. Нажмите «Считать в грань [${nextFace}]».`,
+              `Грань ${nextIdx + 1}/6 [${nextFace}] под камерой (поворот ${state.scanPose.U.cw * 90}°). Нажмите «Считать в грань [${nextFace}]».`,
               "info"
             );
           } else {
-            // После 6-й грани D делаем финальное покачивание площадки на 45° и переходим к сборке
             setScanStatusText("Все 6 сторон пройдены. Поворот площадки на 45° туда-обратно...", "info");
             await wigglePlatform45C();
             if (state.emergencyStop) return;
 
             updatePlannedStepsFromCube();
-            const valid = isCubeValid(state.cubeNet);
-            const msg = valid
+            const report = getValidationReport(state.cubeNet);
+            const msg = report.valid
               ? "Все 6 сторон готовы (54/54)! Переходите к разделу «4. Сборка и монитор шагов»."
-              : "Цикл переворотов завершен. Проверьте, все ли 6 граней считаны кнопкой «Считать в грань».";
-            setScanStatusText(msg, valid ? "done" : "warn");
+              : "Цикл переворотов завершен: " + report.reason;
+            setScanStatusText(msg, report.valid ? "done" : "warn");
             logMsg(msg);
           }
         } finally {
@@ -1602,7 +1718,7 @@
         }
       };
 
-      // КНОПКА «СЧИТАТЬ В ГРАНЬ [X]»: записывает цвета ТОЛЬКО в выбранную грань X
+      // КНОПКА «СЧИТАТЬ В ГРАНЬ [X]»: записывает цвета в выбранную грань с автодоворотом матрицы 3x3
       window.captureCurrentFace = function () {
         if (state.scanningStepBusy) return;
         const targetFace = state.activeFace;
@@ -1612,9 +1728,15 @@
           setScanStatusText("Ошибка: камера не активна. Включите камеру.", "warn");
           return;
         }
-        commitFaceColors(targetFace, snap.colors, snap.rawRgb);
+
+        // Компенсируем 3D-поворот грани под камерой, чтобы на развертке она легла в канонической ориентации
+        const cwOffset = (state.scanPose.U && state.scanPose.U.face === targetFace) ? state.scanPose.U.cw : 0;
+        const orientedColors = rotateGridCW(snap.colors, cwOffset);
+        const orientedRaw = rotateGridCW(snap.rawRgb, cwOffset);
+
+        commitFaceColors(targetFace, orientedColors, orientedRaw);
         const rec = state.cubeNet[targetFace].join("");
-        logMsg(`Грань [${targetFace}] записана: ${rec}`);
+        logMsg(`Грань [${targetFace}] записана (доворот ${cwOffset * 90}°): ${rec}`);
 
         const idx = SCAN_ORDER.indexOf(targetFace);
         if (idx !== -1 && idx < SCAN_ORDER.length - 1) {
@@ -1648,6 +1770,7 @@
         state.rawCapturedRgb = createFreshRawNet();
         state.scannedFaces = { U: true, L: true, F: true, R: true, B: true, D: true };
         state.scanIndex = 0;
+        state.scanPose = createInitialScanPose();
         renderAllCubeViews();
         updatePlannedStepsFromCube();
         logMsg("Заполнена тестовая развертка и рассчитаны шаги сборки");
@@ -1659,6 +1782,7 @@
         state.scannedFaces = { U: false, L: false, F: false, R: false, B: false, D: false };
         state.activeFace = "U";
         state.scanIndex = 0;
+        state.scanPose = createInitialScanPose();
         state.plannedSteps = [];
         setScanStatusText("Грань 1/6 [U] под камерой. Нажмите «Считать в грань [U]», затем «Плэй / Шаг» для переворота на [F].", "info");
         renderAllCubeViews();
@@ -1726,9 +1850,9 @@
         }
         const valBadge = $("validationBadge");
         if (valBadge) {
-          const valid = isCubeValid(state.cubeNet);
-          valBadge.textContent = valid ? "Готово (54/54)" : `Заполнено ${filled}/54`;
-          valBadge.className = valid ? "text-[11px] font-mono text-emerald-400" : "text-[11px] font-mono text-amber-400";
+          const report = getValidationReport(state.cubeNet);
+          valBadge.textContent = report.valid ? "Готово (54/54)" : `Заполнено ${filled}/54`;
+          valBadge.className = report.valid ? "text-[11px] font-mono text-emerald-400" : "text-[11px] font-mono text-amber-400";
         }
       }
 
@@ -1754,9 +1878,10 @@
         const pct = $("autoPercentText");
         const bar = $("autoProgressBar");
 
-        if (!isCubeValid(state.cubeNet)) {
-          if (stage) stage.textContent = "Ошибка: отсканируйте корректно все 6 граней (54 клетки)";
-          logMsg("Один шаг отменен: развертка неполная или некорректная");
+        const report = getValidationReport(state.cubeNet);
+        if (!report.valid) {
+          if (stage) stage.textContent = "Ошибка: " + report.reason;
+          logMsg("Один шаг отменен: " + report.reason);
           return;
         }
 
@@ -1835,9 +1960,10 @@
           await sleep(200);
           if (state.emergencyStop) return;
 
-          if (!isCubeValid(state.cubeNet)) {
-            setProgress(0, "Ошибка: отсканируйте корректно все 6 граней (54 клетки)");
-            logMsg("Автосборка отменена: развертка неполная или некорректная");
+          const report = getValidationReport(state.cubeNet);
+          if (!report.valid) {
+            setProgress(0, "Ошибка: " + report.reason);
+            logMsg("Автосборка отменена: " + report.reason);
             return;
           }
 
@@ -1965,3 +2091,4 @@
   </script>
 </body>
 </html>
+<!-- LEGO Boost Rubik's Cube Solver v0.22 -->
