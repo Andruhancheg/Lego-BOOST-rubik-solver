@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LEGO Boost Rubik's Cube Solver v0.09</title>
+  <title>LEGO Boost Rubik's Cube Solver v0.10</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -106,7 +106,7 @@
   <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-3 pt-1.5 pb-2.5">
     <!-- Строка версии выше кнопки STOP -->
     <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1.5 px-1">
-      <span id="appVersion" class="text-sky-400 font-bold">v0.09</span>
+      <span id="appVersion" class="text-sky-400 font-bold">v0.10</span>
       <span id="jsStatus" class="text-emerald-400">SYSTEM: READY</span>
     </div>
 
@@ -305,23 +305,23 @@
         <div class="grid grid-cols-3 gap-1.5 text-xs">
           <button type="button" class="preset-a py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700" data-deg="45" data-spd="95">Короткий (45°)</button>
           <button type="button" class="preset-a py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700" data-deg="55" data-spd="90">Средний (55°)</button>
-          <button type="button" class="preset-a py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700" data-deg="85" data-spd="75">Полный (85°)</button>
+          <button type="button" class="preset-a py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700" data-deg="85" data-spd="85">Полный (85°)</button>
         </div>
 
         <div class="space-y-2 text-xs">
           <div>
             <div class="flex justify-between text-slate-300 mb-1">
               <span>Амплитуда хода штока:</span>
-              <span id="valDegA" class="font-mono text-sky-400 font-bold">50°</span>
+              <span id="valDegA" class="font-mono text-sky-400 font-bold">85°</span>
             </div>
-            <input id="rangeDegA" type="range" min="15" max="120" step="1" value="50" class="w-full accent-sky-500" />
+            <input id="rangeDegA" type="range" min="15" max="120" step="1" value="85" class="w-full accent-sky-500" />
           </div>
           <div>
             <div class="flex justify-between text-slate-300 mb-1">
               <span>Скорость / Мощность:</span>
-              <span id="valSpdA" class="font-mono text-emerald-400 font-bold">95%</span>
+              <span id="valSpdA" class="font-mono text-emerald-400 font-bold">85%</span>
             </div>
-            <input id="rangeSpdA" type="range" min="30" max="100" step="5" value="95" class="w-full accent-emerald-500" />
+            <input id="rangeSpdA" type="range" min="30" max="100" step="5" value="85" class="w-full accent-emerald-500" />
           </div>
         </div>
 
@@ -360,16 +360,16 @@
           <div>
             <div class="flex justify-between text-slate-300 mb-1">
               <span>Ход клешни (угол):</span>
-              <span id="valDegB" class="font-mono text-sky-400 font-bold">65°</span>
+              <span id="valDegB" class="font-mono text-sky-400 font-bold">95°</span>
             </div>
-            <input id="rangeDegB" type="range" min="20" max="180" step="1" value="65" class="w-full accent-sky-500" />
+            <input id="rangeDegB" type="range" min="20" max="180" step="1" value="95" class="w-full accent-sky-500" />
           </div>
           <div>
             <div class="flex justify-between text-slate-300 mb-1">
               <span>Усилие прижима:</span>
-              <span id="valSpdB" class="font-mono text-emerald-400 font-bold">70%</span>
+              <span id="valSpdB" class="font-mono text-emerald-400 font-bold">25%</span>
             </div>
-            <input id="rangeSpdB" type="range" min="25" max="100" step="5" value="70" class="w-full accent-emerald-500" />
+            <input id="rangeSpdB" type="range" min="25" max="100" step="5" value="25" class="w-full accent-emerald-500" />
           </div>
         </div>
 
@@ -401,8 +401,8 @@
         <div class="flex items-center justify-between text-xs">
           <span class="text-slate-300">Передаточное число редуктора:</span>
           <select id="gearRatioC" class="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-white font-mono">
-            <option value="1">1 : 1 (прямой)</option>
-            <option value="3" selected>3 : 1 (редуктор)</option>
+            <option value="1" selected>1 : 1 (прямой)</option>
+            <option value="3">3 : 1 (редуктор)</option>
             <option value="5">5 : 1 (понижающий)</option>
           </select>
         </div>
@@ -418,16 +418,16 @@
           <div>
             <div class="flex justify-between text-slate-300 mb-1">
               <span>Компенсация люфта (Backlash):</span>
-              <span id="valBacklashC" class="font-mono text-amber-400 font-bold">4°</span>
+              <span id="valBacklashC" class="font-mono text-amber-400 font-bold">20°</span>
             </div>
-            <input id="rangeBacklashC" type="range" min="0" max="25" step="1" value="4" class="w-full accent-amber-500" />
+            <input id="rangeBacklashC" type="range" min="0" max="25" step="1" value="20" class="w-full accent-amber-500" />
           </div>
           <div>
             <div class="flex justify-between text-slate-300 mb-1">
               <span>Скорость поворота площадки:</span>
-              <span id="valSpdC" class="font-mono text-emerald-400 font-bold">65%</span>
+              <span id="valSpdC" class="font-mono text-emerald-400 font-bold">25%</span>
             </div>
-            <input id="rangeSpdC" type="range" min="25" max="100" step="5" value="65" class="w-full accent-emerald-500" />
+            <input id="rangeSpdC" type="range" min="25" max="100" step="5" value="25" class="w-full accent-emerald-500" />
           </div>
         </div>
 
@@ -503,20 +503,20 @@
           D: Array(9).fill("X")
         },
         config: {
-          invA: true, degA: 50, spdA: 95,
-          invB: true, degB: 65, spdB: 70,
-          invC: true, gearC: 3, calib90C: 90, backlashC: 4, spdC: 65
+          invA: true, degA: 85, spdA: 85,
+          invB: true, degB: 95, spdB: 25,
+          invC: true, gearC: 1, calib90C: 90, backlashC: 20, spdC: 25
         }
       };
 
       try {
-        const saved = localStorage.getItem("lego_rubik_cfg_v08");
+        const saved = localStorage.getItem("lego_rubik_cfg_v010");
         if (saved) Object.assign(state.config, JSON.parse(saved));
       } catch (e) {}
 
       function saveConfig() {
         try {
-          localStorage.setItem("lego_rubik_cfg_v08", JSON.stringify(state.config));
+          localStorage.setItem("lego_rubik_cfg_v010", JSON.stringify(state.config));
         } catch (e) {}
       }
 
@@ -581,7 +581,7 @@
       async function driveClawUntilStall(power, maxMs = 2800) {
         if (state.demoMode) {
           await sleep(350);
-          return power > 0 ? 68 : 0;
+          return power > 0 ? 95 : 0;
         }
         await setMotorPower(PORTS.B, power);
         const startTs = performance.now();
@@ -616,7 +616,6 @@
 
         try {
           if (!state.demoMode && state.characteristic) {
-            // Port Input Format Setup (0x41) для Порта B, режим 0x02 (POS) с уведомлениями
             await sendLwpPacket([0x0a, 0x00, 0x41, PORTS.B, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01]);
             await sleep(150);
           }
@@ -624,12 +623,10 @@
           const dirSign = state.config.invB ? -1 : 1;
           const calPower = 35;
 
-          // 1. Разжимаем клешню до механического упора
           const openPos = await driveClawUntilStall(-dirSign * calPower, 2800);
           if (state.emergencyStop) return;
           await sleep(180);
 
-          // 2. Зажимаем клешню до механического упора
           const closedPos = await driveClawUntilStall(dirSign * calPower, 2800);
           if (state.emergencyStop) return;
 
@@ -639,7 +636,6 @@
           saveConfig();
           syncSettingsUI();
 
-          // 3. Возвращаем клешню в исходное разжатое положение
           await sleep(150);
           await rotateMotorDegrees(PORTS.B, -state.config.degB, state.config.spdB, state.config.invB);
 
