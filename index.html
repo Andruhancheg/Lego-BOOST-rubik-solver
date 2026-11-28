@@ -1,1226 +1,604 @@
 <!DOCTYPE html>
-<html lang="ru" class="h-full">
+<html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LEGO Boost Rubik's Solver</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        /* Custom pulse animation for Bluetooth connecting / calibrating state */
-        @keyframes pulse-blue {
-            0%, 100% { opacity: 1; background-color: #3b82f6; }
-            50% { opacity: 0.45; background-color: #93c5fd; }
-        }
-        .blinking-blue {
-            animation: pulse-blue 1.3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        /* Custom Octagonal Stop Button */
-        .octagon-btn {
-            clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
-            transition: transform 0.1s ease, filter 0.1s ease;
-        }
-        .octagon-btn:active {
-            transform: scale(0.94);
-            filter: brightness(0.9);
-        }
-        /* Custom subtle scrollbars for telemetry log */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
-        ::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.5); border-radius: 9999px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.7); }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LEGO Boost Rubik's Solver</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --card-2: #0b1220;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px;
+      display: flex;
+      justify-content: center;
+    }
+    .app {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .header {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .title-group h1 {
+      margin: 0;
+      font-size: 1.2rem;
+    }
+    .version-badge {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 0.8rem;
+      color: var(--accent);
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    .controls-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .status-pill {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+    .status-pill.connected {
+      background: rgba(34, 197, 94, 0.15);
+      color: #86efac;
+      border-color: rgba(34, 197, 94, 0.4);
+    }
+    button {
+      border: 1px solid var(--border);
+      background: #273549;
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+    button:hover:not(:disabled) { background: #334661; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.primary { background: #0284c7; border-color: #38bdf8; }
+    button.primary:hover:not(:disabled) { background: #0369a1; }
+    button.stop { background: #dc2626; border-color: #f87171; }
+    button.stop:hover:not(:disabled) { background: #b91c1c; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .camera-box {
+      position: relative;
+      width: 100%;
+      max-width: 360px;
+      aspect-ratio: 1 / 1;
+      margin: 0 auto;
+      background: var(--card-2);
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .grid-3x3 {
+      position: absolute;
+      inset: 12%;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      border: 2px solid rgba(255, 255, 255, 0.85);
+      pointer-events: none;
+    }
+    .cell-mark {
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cell-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid #0f172a;
+      background: rgba(255, 255, 255, 0.75);
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .muted { color: var(--muted); font-size: 0.88rem; }
+    .faces-strip {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .face-chip {
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+    }
+    .face-chip.done {
+      border-color: var(--ok);
+      color: #86efac;
+    }
+    .cube-net {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+    }
+    .face-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      background: #020617;
+      padding: 4px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .sq {
+      aspect-ratio: 1 / 1;
+      border-radius: 2px;
+      background: #334155;
+    }
+    .log {
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.78rem;
+      max-height: 120px;
+      overflow-y: auto;
+      color: #cbd5e1;
+      white-space: pre-line;
+    }
+  </style>
 </head>
-<body class="bg-slate-950 text-slate-100 h-full flex flex-col overflow-x-hidden selection:bg-amber-500/30 selection:text-amber-200">
-
-    <!-- Top Header & Status Bar -->
-    <header class="bg-slate-900/95 border-b border-slate-800 px-3 py-2.5 shadow-lg flex items-center justify-between sticky top-0 z-30">
-        <div class="flex items-center space-x-3">
-            <div class="bg-amber-500 text-slate-950 p-2.5 rounded-xl font-black text-lg shadow-inner">
-                <i class="fa-solid fa-cubes"></i>
-            </div>
-            <div>
-                <div class="flex items-center gap-2">
-                    <h1 class="font-bold text-base md:text-lg tracking-tight text-white">Boost Rubik Solver</h1>
-                    <span id="demoBadge" class="hidden text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">Симуляция</span>
-                </div>
-                <p id="hubStatusSubtext" class="text-xs text-slate-400">LEGO Boost (17101) • Камера + Web Bluetooth</p>
-            </div>
-        </div>
-
-        <div class="flex items-center space-x-2.5 sm:space-x-3">
-            <!-- Red Octagonal STOP Button -->
-            <button id="stopBtn" onclick="emergencyStop()" class="octagon-btn bg-red-600 hover:bg-red-500 text-white font-extrabold w-14 h-14 flex items-center justify-center text-xs shadow-lg uppercase tracking-wider cursor-pointer border-2 border-red-300/60" title="Экстренная остановка всех моторов">
-                STOP
-            </button>
-
-            <!-- Bluetooth Connection Toggle Button -->
-            <button id="bleToggleBtn" onclick="toggleBluetooth()" class="w-14 h-14 rounded-xl flex flex-col items-center justify-center transition-all shadow-md bg-orange-600 hover:bg-orange-500 text-white cursor-pointer border border-orange-400/70" title="Подключить LEGO Boost Move Hub">
-                <i id="bleIcon" class="fa-brands fa-bluetooth-b text-xl"></i>
-                <span id="bleText" class="text-[10px] font-bold mt-0.5">Off</span>
-            </button>
-        </div>
-    </header>
-
-    <!-- Main Content Area -->
-    <main class="flex-1 grid grid-cols-1 xl:grid-cols-12 p-3 gap-3 max-w-[1600px] mx-auto w-full">
-
-        <!-- Column 1 (4 cols on XL): Camera Feed, 3x3 Grid & Scanning Wizard -->
-        <section class="xl:col-span-4 flex flex-col gap-3">
-            <!-- Camera Card -->
-            <div class="bg-slate-900/90 rounded-2xl p-3.5 border border-slate-800 shadow-xl">
-                <div class="flex justify-between items-center mb-2.5">
-                    <h2 class="font-semibold text-sm text-slate-200 flex items-center gap-2">
-                        <i class="fa-solid fa-video text-amber-400"></i> Камера (фикс. грань)
-                    </h2>
-                    <div class="flex items-center gap-1.5">
-                        <button onclick="switchCamera()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-700 transition cursor-pointer" title="Переключить камеру">
-                            <i class="fa-solid fa-camera-rotate"></i>
-                        </button>
-                        <button onclick="toggleCameraFeed()" id="camToggleBtn" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer">
-                            Включить
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Video Container with 3x3 Grid Overlay -->
-                <div class="relative w-full aspect-square bg-black rounded-xl overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center">
-                    <video id="webcamVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
-                    <canvas id="visionCanvas" class="hidden"></canvas>
-
-                    <!-- Placeholder when camera is off -->
-                    <div id="camPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-900/95 p-4 text-center">
-                        <i class="fa-solid fa-video-slash text-3xl mb-2 text-slate-600"></i>
-                        <p class="text-xs font-medium text-slate-400">Камера выключена</p>
-                        <p class="text-[11px] text-slate-500 mt-1">Включите камеру или используйте ручной ввод в развертке</p>
-                    </div>
-
-                    <!-- 3x3 Grid Overlay for Color Sampling -->
-                    <div id="gridOverlay" class="absolute inset-8 grid grid-cols-3 grid-rows-3 gap-2 pointer-events-none">
-                        <div class="border-2 border-dashed border-white/75 rounded-lg flex items-center justify-center bg-black/20 sample-cell transition-colors" data-index="0"><span class="w-2 h-2 rounded-full bg-white/90 shadow"></span></div>
-                        <div class="border-2 border-dashed border-white/75 rounded-lg flex items-center justify-center bg-black/20 sample-cell transition-colors" data-index="1"><span class="w-2 h-2 rounded-full bg-white/90 shadow"></span></div>
-                        <div class="border-2 border-dashed border-white/75 rounded-lg flex items-center justify-center bg-black/20 sample-cell transition-colors" data-index="2"><span class="w-2 h-2 rounded-full bg-white/90 shadow"></span></div>
-                        <div class="border-2 border-dashed border-white/75 rounded-lg flex items-center justify-center bg-black/20 sample-cell transition-colors" data-index="3"><span class="w-2 h-2 rounded-full bg-white/90 shadow"></span></div>
-                        <div class="border-2 border-dashed border-white/75 rounded-lg flex items-center justify-center bg-black/20 sample-cell transition-colors" data-index="4"><span class="w-2 h-2 rounded-full bg-white/90 shadow"></span></div>
-                        <div class="border-2 border-dashed border-white/75 rounded-lg flex items-center justify-center bg-black/20 sample-cell transition-colors" data-index="5"><span class="w-2 h-2 rounded-full bg-white/90 shadow"></span></div>
-                        <div class="border-2 border-dashed border-white/75 rounded-lg flex items-center justify-center bg-black/20 sample-cell transition-colors" data-index="6"><span class="w-2 h-2 rounded-full bg-white/90 shadow"></span></div>
-                        <div class="border-2 border-dashed border-white/75 rounded-lg flex items-center justify-center bg-black/20 sample-cell transition-colors" data-index="7"><span class="w-2 h-2 rounded-full bg-white/90 shadow"></span></div>
-                        <div class="border-2 border-dashed border-white/75 rounded-lg flex items-center justify-center bg-black/20 sample-cell transition-colors" data-index="8"><span class="w-2 h-2 rounded-full bg-white/90 shadow"></span></div>
-                    </div>
-                </div>
-
-                <!-- Live Sampled Color Bar -->
-                <div class="mt-2.5 bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between">
-                    <span class="text-xs text-slate-400 font-medium">Цвета в сетке:</span>
-                    <div id="liveColorsPreview" class="flex space-x-1">
-                        <div class="w-5 h-5 rounded bg-slate-800 border border-slate-700"></div>
-                        <div class="w-5 h-5 rounded bg-slate-800 border border-slate-700"></div>
-                        <div class="w-5 h-5 rounded bg-slate-800 border border-slate-700"></div>
-                        <div class="w-5 h-5 rounded bg-slate-800 border border-slate-700"></div>
-                        <div class="w-5 h-5 rounded bg-slate-800 border border-slate-700"></div>
-                        <div class="w-5 h-5 rounded bg-slate-800 border border-slate-700"></div>
-                        <div class="w-5 h-5 rounded bg-slate-800 border border-slate-700"></div>
-                        <div class="w-5 h-5 rounded bg-slate-800 border border-slate-700"></div>
-                        <div class="w-5 h-5 rounded bg-slate-800 border border-slate-700"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Scanning Wizard Card -->
-            <div class="bg-slate-900/90 rounded-2xl p-3.5 border border-slate-800 shadow-xl">
-                <div class="flex justify-between items-center mb-2.5">
-                    <h2 class="font-semibold text-sm text-slate-200 flex items-center gap-2">
-                        <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i> Мастер сканирования
-                    </h2>
-                    <span id="scanStepBadge" class="text-xs bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-semibold">Шаг 1 из 6</span>
-                </div>
-
-                <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800 mb-3 text-center">
-                    <p id="currentFaceInstruction" class="text-sm font-semibold text-slate-100">Грань: <span class="text-amber-400 uppercase">Front (F)</span></p>
-                    <p class="text-xs text-slate-400 mt-0.5">Считайте грань с камеры и поверните кубик роботом</p>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2">
-                    <button onclick="captureCurrentFace()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow cursor-pointer">
-                        <i class="fa-solid fa-camera"></i> Захват грани
-                    </button>
-                    <button onclick="rotateToNextFaceRobot()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow cursor-pointer">
-                        <i class="fa-solid fa-rotate"></i> Повернуть
-                    </button>
-                </div>
-
-                <!-- 6 Faces Progress Matrix -->
-                <div class="mt-3 grid grid-cols-6 gap-1.5 pt-2.5 border-t border-slate-800">
-                    <div id="faceStatus0" class="h-8 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-xs font-bold border border-slate-700">F</div>
-                    <div id="faceStatus1" class="h-8 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-xs font-bold border border-slate-700">R</div>
-                    <div id="faceStatus2" class="h-8 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-xs font-bold border border-slate-700">B</div>
-                    <div id="faceStatus3" class="h-8 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-xs font-bold border border-slate-700">L</div>
-                    <div id="faceStatus4" class="h-8 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-xs font-bold border border-slate-700">U</div>
-                    <div id="faceStatus5" class="h-8 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-xs font-bold border border-slate-700">D</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Column 2 (4 cols on XL): Automatic Claw Calibration & Motor Settings -->
-        <section class="xl:col-span-4 flex flex-col gap-3">
-            <!-- Automatic Claw Calibration Card -->
-            <div class="bg-slate-900/90 rounded-2xl p-4 border border-slate-800 shadow-xl">
-                <div class="flex items-center justify-between mb-3">
-                    <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-                            <i class="fa-solid fa-hands-holding-circle"></i>
-                        </div>
-                        <div>
-                            <h2 class="font-semibold text-sm text-white">Автокалибровка клешни</h2>
-                            <p class="text-[11px] text-slate-400">Определение упоров по сопротивлению мотора</p>
-                        </div>
-                    </div>
-                    <span id="clawCalBadge" class="text-[10px] font-bold uppercase px-2 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-                        Не откалибровано
-                    </span>
-                </div>
-
-                <!-- Auto-calibrate on BT connect toggle -->
-                <div class="flex items-center justify-between bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 mb-3">
-                    <div>
-                        <p class="text-xs font-semibold text-slate-200">Калибровка при подключении BT</p>
-                        <p class="text-[11px] text-slate-400">Автозапуск сразу после соединения с хабом</p>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="autoCalOnConnect" checked onchange="updateCalSettingsFromUI()" class="sr-only peer">
-                        <div class="w-10 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
-                    </label>
-                </div>
-
-                <!-- Port & Stall Sensitivity Parameters -->
-                <div class="grid grid-cols-2 gap-2.5 mb-3">
-                    <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
-                        <label for="clawPortSelect" class="block text-[11px] text-slate-400 mb-1">Порт мотора клешни</label>
-                        <select id="clawPortSelect" onchange="updateCalSettingsFromUI()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs font-bold text-cyan-300 focus:outline-none focus:border-cyan-500">
-                            <option value="0">Port A (0x00)</option>
-                            <option value="1" selected>Port B (0x01)</option>
-                            <option value="2">Port C (0x02)</option>
-                            <option value="3">Port D (0x03)</option>
-                        </select>
-                    </div>
-
-                    <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
-                        <div class="flex justify-between text-[11px] mb-1">
-                            <span class="text-slate-400">Мощность:</span>
-                            <span id="stallPowerVal" class="font-bold text-cyan-300">28%</span>
-                        </div>
-                        <input id="stallPowerInput" type="range" min="15" max="60" value="28" step="1" oninput="updateCalSettingsFromUI()" class="w-full accent-cyan-400 cursor-pointer">
-                    </div>
-
-                    <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
-                        <div class="flex justify-between text-[11px] mb-1">
-                            <span class="text-slate-400">Интервал опроса:</span>
-                            <span id="stallIntervalVal" class="font-bold text-cyan-300">120 мс</span>
-                        </div>
-                        <input id="stallIntervalInput" type="range" min="60" max="300" value="120" step="10" oninput="updateCalSettingsFromUI()" class="w-full accent-cyan-400 cursor-pointer">
-                    </div>
-
-                    <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
-                        <div class="flex justify-between text-[11px] mb-1">
-                            <span class="text-slate-400">Порог упора (Δ°):</span>
-                            <span id="stallDeltaVal" class="font-bold text-cyan-300">3°</span>
-                        </div>
-                        <input id="stallDeltaInput" type="range" min="1" max="12" value="3" step="1" oninput="updateCalSettingsFromUI()" class="w-full accent-cyan-400 cursor-pointer">
-                    </div>
-                </div>
-
-                <!-- Live Calibration Phase & Telemetry -->
-                <div class="bg-slate-950/80 rounded-xl p-3 border border-slate-800 mb-3">
-                    <div class="flex items-center justify-between text-xs mb-1.5">
-                        <span class="text-slate-400">Фаза:</span>
-                        <span id="clawCalPhaseText" class="font-semibold text-cyan-300">Ожидание</span>
-                    </div>
-                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-3">
-                        <div id="clawCalProgressBar" class="bg-cyan-400 h-full w-0 transition-all duration-200"></div>
-                    </div>
-
-                    <div class="grid grid-cols-4 gap-1.5 text-center">
-                        <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
-                            <div class="text-[10px] text-slate-400">Закрыто</div>
-                            <div id="clawClosedAngle" class="text-xs font-extrabold text-rose-400 mt-0.5">—</div>
-                        </div>
-                        <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
-                            <div class="text-[10px] text-slate-400">Открыто</div>
-                            <div id="clawOpenAngle" class="text-xs font-extrabold text-emerald-400 mt-0.5">—</div>
-                        </div>
-                        <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
-                            <div class="text-[10px] text-slate-400">Ход (Span)</div>
-                            <div id="clawSpanAngle" class="text-xs font-extrabold text-amber-400 mt-0.5">—</div>
-                        </div>
-                        <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
-                            <div class="text-[10px] text-slate-400">Текущий °</div>
-                            <div id="clawCurrentAngle" class="text-xs font-extrabold text-cyan-300 mt-0.5">0°</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Calibration Action Buttons -->
-                <div class="grid grid-cols-3 gap-2">
-                    <button id="runCalBtn" onclick="runClawCalibration()" class="col-span-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow cursor-pointer">
-                        <i class="fa-solid fa-gauge-high"></i> Калибровать клешню
-                    </button>
-                    <button onclick="moveClawToState('open')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2.5 px-2 rounded-xl text-xs border border-slate-700 transition cursor-pointer" title="Открыть клешню">
-                        Открыть
-                    </button>
-                </div>
-                <div class="grid grid-cols-2 gap-2 mt-2">
-                    <button onclick="moveClawToState('center')" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 font-medium py-1.5 px-2 rounded-lg text-[11px] border border-slate-800 transition cursor-pointer">
-                        Центр (Парковка)
-                    </button>
-                    <button onclick="moveClawToState('closed')" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 font-medium py-1.5 px-2 rounded-lg text-[11px] border border-slate-800 transition cursor-pointer">
-                        Захват (Закрыть)
-                    </button>
-                </div>
-            </div>
-
-            <!-- Motor Calibration Card -->
-            <div class="bg-slate-900/90 rounded-2xl p-4 border border-slate-800 shadow-xl flex-1">
-                <div class="flex justify-between items-center mb-3">
-                    <h2 class="font-semibold text-sm text-slate-200 flex items-center gap-2">
-                        <i class="fa-solid fa-sliders text-amber-400"></i> Калибровка приводов
-                    </h2>
-                    <span class="text-[11px] text-slate-400">Углы поворота</span>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2.5">
-                    <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
-                        <div class="flex justify-between text-xs mb-1">
-                            <span class="text-slate-400">Грань (Port A):</span>
-                            <span id="angleAVal" class="font-bold text-amber-400">90°</span>
-                        </div>
-                        <input type="range" min="30" max="180" value="90" step="5" oninput="updateMotorAngle('A', this.value)" class="w-full accent-amber-500 cursor-pointer">
-                        <button onclick="testMotor('A')" class="mt-2 w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-1.5 rounded-lg text-xs font-medium border border-slate-700 transition cursor-pointer">Тест A</button>
-                    </div>
-
-                    <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
-                        <div class="flex justify-between text-xs mb-1">
-                            <span class="text-slate-400">Стол (Port C):</span>
-                            <span id="angleBVal" class="font-bold text-amber-400">90°</span>
-                        </div>
-                        <input type="range" min="30" max="180" value="90" step="5" oninput="updateMotorAngle('B', this.value)" class="w-full accent-amber-500 cursor-pointer">
-                        <button onclick="testMotor('B')" class="mt-2 w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-1.5 rounded-lg text-xs font-medium border border-slate-700 transition cursor-pointer">Тест C</button>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Column 3 (4 cols on XL): Interactive Cube Net Editor, Solver & Telemetry Log -->
-        <section class="xl:col-span-4 flex flex-col gap-3">
-            <!-- Interactive Cube Net & Solver Card -->
-            <div class="bg-slate-900/90 rounded-2xl p-4 border border-slate-800 shadow-xl">
-                <div class="flex items-center justify-between mb-2">
-                    <h2 class="font-semibold text-sm text-slate-200 flex items-center gap-2">
-                        <i class="fa-solid fa-puzzle-piece text-amber-400"></i> Развертка и сборка
-                    </h2>
-                    <button onclick="scrambleCubePreview()" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-700 transition cursor-pointer">
-                        Перемешать
-                    </button>
-                </div>
-
-                <!-- Color Palette Selector for Manual Editing -->
-                <div class="flex items-center justify-between bg-slate-950/70 p-2 rounded-xl border border-slate-800 mb-2.5">
-                    <span class="text-[11px] text-slate-400">Кисть:</span>
-                    <div id="colorPalette" class="flex items-center gap-1.5">
-                        <button onclick="selectBrush('W')" data-brush="W" class="brush-btn w-6 h-6 rounded-md bg-slate-50 border-2 border-amber-400 scale-110 transition cursor-pointer" title="Белый (W)"></button>
-                        <button onclick="selectBrush('Y')" data-brush="Y" class="brush-btn w-6 h-6 rounded-md bg-yellow-400 border-2 border-transparent transition cursor-pointer" title="Желтый (Y)"></button>
-                        <button onclick="selectBrush('R')" data-brush="R" class="brush-btn w-6 h-6 rounded-md bg-red-500 border-2 border-transparent transition cursor-pointer" title="Красный (R)"></button>
-                        <button onclick="selectBrush('O')" data-brush="O" class="brush-btn w-6 h-6 rounded-md bg-orange-500 border-2 border-transparent transition cursor-pointer" title="Оранжевый (O)"></button>
-                        <button onclick="selectBrush('G')" data-brush="G" class="brush-btn w-6 h-6 rounded-md bg-emerald-500 border-2 border-transparent transition cursor-pointer" title="Зеленый (G)"></button>
-                        <button onclick="selectBrush('B')" data-brush="B" class="brush-btn w-6 h-6 rounded-md bg-blue-500 border-2 border-transparent transition cursor-pointer" title="Синий (B)"></button>
-                    </div>
-                </div>
-
-                <!-- Interactive 3x4 Net Preview -->
-                <div class="grid grid-cols-4 gap-1.5 p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 text-center text-[10px]">
-                    <div></div>
-                    <div id="netFace-U" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-900 rounded-lg border border-slate-800"></div>
-                    <div></div>
-                    <div></div>
-
-                    <div id="netFace-L" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-900 rounded-lg border border-slate-800"></div>
-                    <div id="netFace-F" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-900 rounded-lg border border-slate-800"></div>
-                    <div id="netFace-R" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-900 rounded-lg border border-slate-800"></div>
-                    <div id="netFace-B" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-900 rounded-lg border border-slate-800"></div>
-
-                    <div></div>
-                    <div id="netFace-D" class="grid grid-cols-3 gap-0.5 p-1 bg-slate-900 rounded-lg border border-slate-800"></div>
-                    <div></div>
-                    <div></div>
-                </div>
-
-                <!-- Move Sequence Queue -->
-                <div class="mt-3 bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
-                    <div class="flex justify-between items-center mb-1.5">
-                        <span class="text-[11px] text-slate-400">План ходов:</span>
-                        <span id="moveCountBadge" class="text-[11px] font-bold text-amber-400">0 шагов</span>
-                    </div>
-                    <div id="moveSequenceBox" class="flex flex-wrap gap-1 min-h-[28px] items-center text-xs text-slate-500">
-                        Нажмите «Рассчитать и собрать» для генерации ходов
-                    </div>
-                </div>
-
-                <div class="mt-3 flex gap-2">
-                    <button onclick="startAutoSolve()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg transition cursor-pointer">
-                        <i class="fa-solid fa-play"></i> Рассчитать и собрать
-                    </button>
-                    <button onclick="resetCubeData()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 px-3 rounded-xl text-xs border border-slate-700 transition cursor-pointer" title="Сбросить развертку">
-                        <i class="fa-solid fa-rotate-right"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Live Event & Telemetry Log Card -->
-            <div class="bg-slate-900/90 rounded-2xl p-3.5 border border-slate-800 shadow-xl flex-1 flex flex-col min-h-[200px]">
-                <div class="flex items-center justify-between mb-2">
-                    <h2 class="font-semibold text-xs uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                        <i class="fa-solid fa-terminal text-emerald-400"></i> Телеметрия и лог
-                    </h2>
-                    <button onclick="clearTelemetryLog()" class="text-[11px] text-slate-400 hover:text-slate-200 transition cursor-pointer">
-                        Очистить
-                    </button>
-                </div>
-                <div id="telemetryLog" class="flex-1 bg-slate-950/90 rounded-xl p-2.5 border border-slate-800 font-mono text-[11px] space-y-1.5 overflow-y-auto max-h-56">
-                    <div class="text-slate-500">[Система] Готово. Подключите LEGO Boost или включите режим симуляции.</div>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <!-- Custom Message Box / Modal (No alert/confirm) -->
-    <div id="messageModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-center">
-            <div id="modalIcon" class="text-3xl mb-3 text-amber-400"><i class="fa-solid fa-circle-info"></i></div>
-            <h3 id="modalTitle" class="font-bold text-base mb-1 text-white">Сообщение</h3>
-            <p id="modalText" class="text-xs text-slate-300 mb-4 leading-relaxed">Текст сообщения...</p>
-            <button onclick="closeModal()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition cursor-pointer">ОК</button>
-        </div>
+<body>
+  <div class="app">
+    <div class="header">
+      <div class="title-group">
+        <h1>LEGO Boost Rubik's Solver</h1>
+        <span class="version-badge" id="appVersion">Версия приложения: v1.1.0-claw-cal</span>
+      </div>
+      <div class="controls-top">
+        <span class="status-pill" id="btStatus">BT: Отключено</span>
+        <button class="primary" id="btnConnect">Подключить BT</button>
+        <button class="stop" id="btnStop">СТОП</button>
+      </div>
     </div>
 
-    <script>
-        // =========================================================================
-        // 1. STATE & CONSTANTS (LEGO BOOST MOVE HUB + CLAW CALIBRATION + VISION)
-        // =========================================================================
-        const BOOST_SERVICE_UUID = '00001523-1212-efde-1523-785feabcd124';
-        const BOOST_CHAR_UUID    = '00001565-1212-efde-1523-785feabcd124';
+    <div class="card">
+      <div class="row" style="justify-content: space-between;">
+        <strong>Калибровка клешни по сопротивлению мотора</strong>
+        <span class="muted" id="clawCalStatus">Ожидание подключения</span>
+      </div>
+      <div class="muted" id="clawBounds">
+        Закрыто (упор): — | Открыто (упор): — | Порт мотора клешни: B
+      </div>
+      <div class="row">
+        <button id="btnRecalibrateClaw" disabled>Повторить автокалибровку клешни</button>
+        <button id="btnTestClose" disabled>Закрыть до упора</button>
+        <button id="btnTestOpen" disabled>Открыть до упора</button>
+      </div>
+    </div>
 
-        let bluetoothDevice = null;
-        let bleCharacteristic = null;
-        let connectionState = 'disconnected'; // 'disconnected' | 'connecting' | 'connected'
-        let isSimulationMode = false;
-        let emergencyStopFlag = false;
+    <div class="card">
+      <div class="row" style="justify-content: space-between;">
+        <strong>Камера и сканирование граней</strong>
+        <span class="muted" id="scanStepText">Грань 1 из 6 (U)</span>
+      </div>
+      <div class="camera-box">
+        <video id="video" playsinline autoplay muted></video>
+        <div class="grid-3x3" id="gridOverlay"></div>
+      </div>
+      <canvas id="canvas" width="320" height="320" style="display:none;"></canvas>
+      <div class="row">
+        <button id="btnStartCamera">Включить камеру</button>
+        <button class="primary" id="btnScanFace">Сканировать грань</button>
+        <button id="btnResetCube">Сбросить развертку</button>
+      </div>
+      <div class="faces-strip" id="facesStrip"></div>
+      <div class="cube-net" id="cubeNet"></div>
+    </div>
 
-        // Motor calibration angles for face / table turns
-        let motorAngles = { A: 90, B: 90 };
+    <div class="card">
+      <strong>Журнал</strong>
+      <div class="log" id="logBox"></div>
+    </div>
+  </div>
 
-        // Claw calibration configuration & live state
-        const clawConfig = {
-            autoOnConnect: true,
-            port: 1,            // 0=A, 1=B, 2=C, 3=D (default Port B)
-            power: 28,          // motor power % for gentle stall detection
-            pollIntervalMs: 120,// polling interval in ms
-            stallDeltaDeg: 3    // min encoder movement delta between polls before stall is declared
+  <script>
+    const APP_VERSION = "v1.1.0-claw-cal";
+    const BOOST_SERVICE_UUID = "00001623-1212-efde-1623-785feabcd123";
+    const BOOST_CHAR_UUID   = "00001624-1212-efde-1623-785feabcd123";
+
+    // Порты LEGO Boost Move Hub: A = 0x00, B = 0x01, C = 0x02, D = 0x03
+    const PORT_CLAW = 0x01; // Мотор клешни на порту B
+
+    const FACE_NAMES = ["U", "R", "F", "D", "L", "B"];
+    const COLOR_MAP = {
+      W: { name: "Белый", hex: "#f8fafc" },
+      Y: { name: "Желтый", hex: "#facc15" },
+      R: { name: "Красный", hex: "#ef4444" },
+      O: { name: "Оранжевый", hex: "#f97316" },
+      B: { name: "Синий", hex: "#2563eb" },
+      G: { name: "Зеленый", hex: "#22c55e" },
+      "?": { name: "Не задан", hex: "#334155" }
+    };
+
+    let bleDevice = null;
+    let bleChar = null;
+    let isConnected = false;
+    let stopRequested = false;
+
+    // Состояние автокалибровки клешни
+    let latestMotorAngle = 0;
+    let latestAngleTs = 0;
+    let clawClosedPos = null;
+    let clawOpenPos = null;
+    let isCalibratingClaw = false;
+
+    // Состояние кубика
+    let currentFaceIndex = 0;
+    let cubeState = {};
+    FACE_NAMES.forEach(f => { cubeState[f] = Array(9).fill("?"); });
+
+    const elVersion = document.getElementById("appVersion");
+    const elBtStatus = document.getElementById("btStatus");
+    const elBtnConnect = document.getElementById("btnConnect");
+    const elBtnStop = document.getElementById("btnStop");
+    const elClawCalStatus = document.getElementById("clawCalStatus");
+    const elClawBounds = document.getElementById("clawBounds");
+    const elBtnRecal = document.getElementById("btnRecalibrateClaw");
+    const elBtnTestClose = document.getElementById("btnTestClose");
+    const elBtnTestOpen = document.getElementById("btnTestOpen");
+    const elVideo = document.getElementById("video");
+    const elCanvas = document.getElementById("canvas");
+    const elGrid = document.getElementById("gridOverlay");
+    const elScanStepText = document.getElementById("scanStepText");
+    const elFacesStrip = document.getElementById("facesStrip");
+    const elCubeNet = document.getElementById("cubeNet");
+    const elLog = document.getElementById("logBox");
+
+    function log(msg) {
+      const time = new Date().toLocaleTimeString();
+      elLog.textContent += `[${time}] ${msg}\n`;
+      elLog.scrollTop = elLog.scrollHeight;
+    }
+
+    function initUI() {
+      elVersion.textContent = `Версия приложения: ${APP_VERSION}`;
+      elGrid.innerHTML = "";
+      for (let i = 0; i < 9; i++) {
+        const cell = document.createElement("div");
+        cell.className = "cell-mark";
+        cell.innerHTML = `<span class="cell-dot" id="dot-${i}"></span>`;
+        elGrid.appendChild(cell);
+      }
+      renderCubeNet();
+      log(`Приложение инициализировано (${APP_VERSION}).`);
+    }
+
+    function renderCubeNet() {
+      elScanStepText.textContent = `Грань ${currentFaceIndex + 1} из 6 (${FACE_NAMES[currentFaceIndex]})`;
+      elFacesStrip.innerHTML = "";
+      FACE_NAMES.forEach((f, idx) => {
+        const filled = cubeState[f].every(c => c !== "?");
+        const chip = document.createElement("span");
+        chip.className = `face-chip ${filled ? "done" : ""}`;
+        chip.textContent = `${f}: ${filled ? "OK" : "..."}`;
+        chip.style.cursor = "pointer";
+        chip.onclick = () => {
+          currentFaceIndex = idx;
+          renderCubeNet();
         };
+        elFacesStrip.appendChild(chip);
+      });
 
-        const clawCalibration = {
-            calibrated: false,
-            isRunning: false,
-            phase: 'idle',      // 'idle' | 'closing' | 'backing_off_close' | 'opening' | 'centering' | 'done' | 'aborted'
-            closedAngle: null,  // mechanical stop angle when closed
-            openAngle: null,    // mechanical stop angle when open
-            centerAngle: null,  // safe neutral/park angle
-            currentAngle: 0     // tracked encoder angle in degrees
-        };
+      elCubeNet.innerHTML = "";
+      FACE_NAMES.forEach(f => {
+        const fg = document.createElement("div");
+        fg.className = "face-grid";
+        fg.title = `Грань ${f}`;
+        cubeState[f].forEach(code => {
+          const sq = document.createElement("div");
+          sq.className = "sq";
+          sq.style.background = (COLOR_MAP[code] || COLOR_MAP["?"]).hex;
+          fg.appendChild(sq);
+        });
+        elCubeNet.appendChild(fg);
+      });
+    }
 
-        // Cube state & brush
-        const faceNames = ['Front (F)', 'Right (R)', 'Back (B)', 'Left (L)', 'Up (U)', 'Down (D)'];
-        const faceKeys = ['F', 'R', 'B', 'L', 'U', 'D'];
-        const colorMapHex = {
-            W: '#f8fafc',
-            Y: '#eab308',
-            R: '#ef4444',
-            O: '#f97316',
-            G: '#22c55e',
-            B: '#3b82f6'
-        };
+    function setConnectedState(connected) {
+      isConnected = connected;
+      elBtStatus.textContent = connected ? "BT: Подключено" : "BT: Отключено";
+      elBtStatus.classList.toggle("connected", connected);
+      elBtnConnect.textContent = connected ? "Отключить BT" : "Подключить BT";
+      elBtnRecal.disabled = !connected;
+      elBtnTestClose.disabled = !connected;
+      elBtnTestOpen.disabled = !connected;
+    }
 
-        let activeBrush = 'W';
-        let currentScanStep = 0;
-        let liveSampledColors = Array(9).fill('W');
-        let cubeData = {
-            U: Array(9).fill('W'),
-            R: Array(9).fill('R'),
-            F: Array(9).fill('G'),
-            D: Array(9).fill('Y'),
-            L: Array(9).fill('O'),
-            B: Array(9).fill('B')
-        };
+    async function sendCommand(bytes) {
+      if (!bleChar || !isConnected) return;
+      await bleChar.writeValue(new Uint8Array(bytes));
+    }
 
-        // Camera state
-        let videoStream = null;
-        let isCameraActive = false;
-        let currentFacingMode = 'environment';
+    // Подписка на датчик угла/позиции мотора (Port Value / Input Format)
+    async function subscribePortAngle(port) {
+      // Включаем уведомления для порта мотора (режим 0x02 - Absolute Position / Angle)
+      // Port Input Format Setup (0x41): [len, 0x00, 0x41, port, mode_LSB, mode_MSB, delta_LSB, delta_MSB, delta_ex, unit, notif]
+      await sendCommand([0x0A, 0x00, 0x41, port, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01]);
+    }
 
-        // =========================================================================
-        // 2. TELEMETRY LOG & MODAL HELPERS
-        // =========================================================================
-        function logEvent(message, level = 'info') {
-            const logEl = document.getElementById('telemetryLog');
-            const now = new Date().toLocaleTimeString('ru-RU', { hour12: false });
-            const colorMap = {
-                info: 'text-slate-300',
-                success: 'text-emerald-400',
-                warn: 'text-amber-300',
-                error: 'text-rose-400',
-                ble: 'text-cyan-300'
-            };
-            const row = document.createElement('div');
-            row.className = colorMap[level] || 'text-slate-300';
-            row.textContent = `[${now}] ${message}`;
-            logEl.appendChild(row);
-            logEl.scrollTop = logEl.scrollHeight;
+    function handleHubNotification(event) {
+      const v = event.target.value;
+      if (v.byteLength < 5) return;
+      const msgType = v.getUint8(2);
+      // 0x45 = Port Value (Single)
+      if (msgType === 0x45) {
+        const port = v.getUint8(3);
+        if (port === PORT_CLAW && v.byteLength >= 8) {
+          latestMotorAngle = v.getInt32(4, true);
+          latestAngleTs = performance.now();
         }
+      }
+    }
 
-        function clearTelemetryLog() {
-            document.getElementById('telemetryLog').innerHTML = '';
-            logEvent('Журнал очищен.', 'info');
+    async function setMotorPower(port, power) {
+      // power от -100 до 100 -> signed int8
+      const pByte = power < 0 ? (256 + power) & 0xFF : power & 0xFF;
+      // Start Power (0x41 subcommand 0x01): [0x06, 0x00, 0x81, port, 0x11, 0x51, pByte]
+      await sendCommand([0x06, 0x00, 0x81, port, 0x11, 0x51, pByte]);
+    }
+
+    async function stopMotor(port) {
+      // Brake / Float (0x00 power)
+      await sendCommand([0x06, 0x00, 0x81, port, 0x11, 0x51, 0x00]);
+    }
+
+    const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
+    // Определение упора клешни по сопротивлению мотора:
+    // подаем щадящую мощность и следим за изменением угла; при механическом упоре угол перестает меняться
+    async function driveUntilStall(port, power, maxDurationMs = 3500) {
+      await setMotorPower(port, power);
+      const startTime = performance.now();
+      let lastAngle = latestMotorAngle;
+      let stallSince = null;
+      const stallThresholdDeg = 2;
+      const stallHoldMs = 320;
+
+      while (!stopRequested && (performance.now() - startTime) < maxDurationMs) {
+        await sleep(80);
+        const curAngle = latestMotorAngle;
+        if (Math.abs(curAngle - lastAngle) <= stallThresholdDeg) {
+          if (stallSince === null) stallSince = performance.now();
+          if ((performance.now() - stallSince) >= stallHoldMs) {
+            await stopMotor(port);
+            return curAngle;
+          }
+        } else {
+          lastAngle = curAngle;
+          stallSince = null;
         }
+      }
+      await stopMotor(port);
+      return latestMotorAngle;
+    }
 
-        function showModal(title, text, type = 'info') {
-            document.getElementById('modalTitle').textContent = title;
-            document.getElementById('modalText').textContent = text;
-            const iconDiv = document.getElementById('modalIcon');
+    // Автокалибровка клешни при подключении по BT
+    async function autoCalibrateClaw() {
+      if (!isConnected || isCalibratingClaw) return;
+      isCalibratingClaw = true;
+      stopRequested = false;
+      elClawCalStatus.textContent = "Калибровка...";
+      log("Автокалибровка клешни: поиск крайних положений по сопротивлению мотора...");
 
-            if (type === 'success') {
-                iconDiv.className = 'text-3xl mb-3 text-emerald-400';
-                iconDiv.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
-            } else if (type === 'warning' || type === 'error') {
-                iconDiv.className = 'text-3xl mb-3 text-rose-500';
-                iconDiv.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
-            } else {
-                iconDiv.className = 'text-3xl mb-3 text-amber-400';
-                iconDiv.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
-            }
-            document.getElementById('messageModal').classList.remove('hidden');
+      try {
+        // Сначала немного приоткроем/подвинем или сразу найдем упор закрытия (-35) и упор открытия (+35)
+        const closedAngle = await driveUntilStall(PORT_CLAW, -35, 3000);
+        if (stopRequested) throw new Error("Остановлено пользователем");
+        await sleep(200);
+
+        const openAngle = await driveUntilStall(PORT_CLAW, 35, 3000);
+        if (stopRequested) throw new Error("Остановлено пользователем");
+
+        clawClosedPos = closedAngle;
+        clawOpenPos = openAngle;
+        elClawCalStatus.textContent = "Калибровка завершена";
+        elClawBounds.textContent = `Закрыто (упор): ${clawClosedPos}° | Открыто (упор): ${clawOpenPos}° | Порт мотора клешни: B`;
+        log(`Калибровка клешни завершена: закрыто = ${clawClosedPos}°, открыто = ${clawOpenPos}°.`);
+      } catch (err) {
+        elClawCalStatus.textContent = "Ошибка / Стоп";
+        log(`Калибровка клешни прервана: ${err.message}`);
+      } finally {
+        await stopMotor(PORT_CLAW);
+        isCalibratingClaw = false;
+      }
+    }
+
+    async function connectBluetooth() {
+      if (isConnected && bleDevice) {
+        if (bleDevice.gatt.connected) {
+          bleDevice.gatt.disconnect();
         }
+        setConnectedState(false);
+        log("Bluetooth отключен.");
+        return;
+      }
 
-        function closeModal() {
-            document.getElementById('messageModal').classList.add('hidden');
+      try {
+        log("Поиск LEGO Boost Move Hub...");
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [BOOST_SERVICE_UUID] }],
+          optionalServices: [BOOST_SERVICE_UUID]
+        });
+
+        bleDevice.addEventListener("gattserverdisconnected", () => {
+          setConnectedState(false);
+          log("Соединение с LEGO Boost разорвано.");
+        });
+
+        const server = await bleDevice.gatt.connect();
+        const service = await server.getPrimaryService(BOOST_SERVICE_UUID);
+        bleChar = await service.getCharacteristic(BOOST_CHAR_UUID);
+        await bleChar.startNotifications();
+        bleChar.addEventListener("characteristicvaluechanged", handleHubNotification);
+
+        setConnectedState(true);
+        log("Подключено к LEGO Boost Move Hub.");
+
+        await subscribePortAngle(PORT_CLAW);
+        await sleep(250);
+        await autoCalibrateClaw();
+      } catch (err) {
+        setConnectedState(false);
+        log(`Ошибка BT: ${err.message}`);
+      }
+    }
+
+    async function emergencyStop() {
+      stopRequested = true;
+      isCalibratingClaw = false;
+      log("АВАРИЙНЫЙ СТОП!");
+      if (isConnected) {
+        for (const p of [0x00, 0x01, 0x02, 0x03]) {
+          try { await stopMotor(p); } catch (_) {}
         }
+      }
+    }
 
-        // =========================================================================
-        // 3. WEB BLUETOOTH & EMERGENCY STOP
-        // =========================================================================
-        async function toggleBluetooth() {
-            if (connectionState === 'connected') {
-                disconnectBluetooth();
-            } else {
-                await connectBluetooth();
-            }
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 640 } },
+          audio: false
+        });
+        elVideo.srcObject = stream;
+        log("Камера запущена.");
+      } catch (err) {
+        log(`Ошибка камеры: ${err.message}`);
+      }
+    }
+
+    function classifyRGB(r, g, b) {
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      if (max - min < 35 && max > 165) return "W";
+      if (r > 170 && g > 150 && b < 90) return "Y";
+      if (r > 170 && g >= 70 && g < 150 && b < 80) return "O";
+      if (r > 150 && g < 85 && b < 85) return "R";
+      if (g > 120 && r < 120 && b < 130) return "G";
+      if (b > 130 && r < 110) return "B";
+      return "W";
+    }
+
+    function scanCurrentFace() {
+      const ctx = elCanvas.getContext("2d");
+      ctx.drawImage(elVideo, 0, 0, elCanvas.width, elCanvas.height);
+      const faceKey = FACE_NAMES[currentFaceIndex];
+      const detected = [];
+
+      // Сетка внутри [12% .. 88%]
+      const pad = 0.12;
+      const span = 1 - pad * 2;
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 3; col++) {
+          const idx = row * 3 + col;
+          const cx = Math.floor(((pad + (col + 0.5) * (span / 3)) * elCanvas.width));
+          const cy = Math.floor(((pad + (row + 0.5) * (span / 3)) * elCanvas.height));
+          const px = ctx.getImageData(cx - 4, cy - 4, 8, 8).data;
+          let r = 0, g = 0, b = 0, count = 0;
+          for (let i = 0; i < px.length; i += 4) {
+            r += px[i]; g += px[i + 1]; b += px[i + 2]; count++;
+          }
+          const code = classifyRGB(r / count, g / count, b / count);
+          detected.push(code);
+          const dot = document.getElementById(`dot-${idx}`);
+          if (dot) dot.style.background = COLOR_MAP[code].hex;
         }
-
-        async function connectBluetooth() {
-            emergencyStopFlag = false;
-            setBleState('connecting');
-            logEvent('Поиск LEGO Boost Move Hub по Web Bluetooth...', 'ble');
-
-            // Fallback to simulation mode if Web Bluetooth is unavailable in current browser/context
-            if (!navigator.bluetooth || !navigator.bluetooth.requestDevice) {
-                isSimulationMode = true;
-                document.getElementById('demoBadge').classList.remove('hidden');
-                logEvent('Web Bluetooth недоступен в этом браузере. Включен режим симуляции хаба.', 'warn');
-                await sleep(600);
-                setBleState('connected');
-                await handlePostConnectActions();
-                return;
-            }
-
-            try {
-                bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    filters: [
-                        { services: [BOOST_SERVICE_UUID] },
-                        { namePrefix: 'LPF2' },
-                        { namePrefix: 'LEGO' },
-                        { namePrefix: 'Boost' }
-                    ],
-                    optionalServices: [BOOST_SERVICE_UUID]
-                });
-
-                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
-
-                const server = await bluetoothDevice.gatt.connect();
-                const service = await server.getPrimaryService(BOOST_SERVICE_UUID);
-                bleCharacteristic = await service.getCharacteristic(BOOST_CHAR_UUID);
-
-                // Subscribe to notifications if supported (encoder / sensor telemetry)
-                if (bleCharacteristic.properties && bleCharacteristic.properties.notify) {
-                    await bleCharacteristic.startNotifications();
-                    bleCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification);
-                }
-
-                isSimulationMode = false;
-                document.getElementById('demoBadge').classList.add('hidden');
-                setBleState('connected');
-                logEvent(`Подключено к ${bluetoothDevice.name || 'LEGO Boost Hub'}`, 'success');
-
-                await handlePostConnectActions();
-            } catch (error) {
-                logEvent(`BT подключение прервано (${error.message || error}). Запуск симуляции для теста.`, 'warn');
-                isSimulationMode = true;
-                document.getElementById('demoBadge').classList.remove('hidden');
-                setBleState('connected');
-                await handlePostConnectActions();
-            }
-        }
-
-        function handleBleNotification(event) {
-            try {
-                const value = event.target.value;
-                if (!value || value.byteLength < 4) return;
-                const bytes = Array.from(new Uint8Array(value.buffer));
-                // Parse port angle if LPF2 port value message arrives
-                if (bytes.length >= 6 && bytes[3] === clawConfig.port) {
-                    const rawDeg = (bytes[4] | (bytes[5] << 8));
-                    const signedDeg = rawDeg > 32767 ? rawDeg - 65536 : rawDeg;
-                    clawCalibration.currentAngle = signedDeg;
-                    document.getElementById('clawCurrentAngle').textContent = `${signedDeg}°`;
-                }
-            } catch (err) {
-                logEvent(`Ошибка парсинга BLE уведомления: ${err.message}`, 'error');
-            }
-        }
-
-        async function handlePostConnectActions() {
-            if (clawConfig.autoOnConnect) {
-                logEvent('Автокалибровка клешни при подключении активна — запуск...', 'ble');
-                await runClawCalibration();
-            } else {
-                logEvent('Автокалибровка при подключении отключена в настройках.', 'info');
-            }
-        }
-
-        function disconnectBluetooth() {
-            if (bluetoothDevice && bluetoothDevice.gatt && bluetoothDevice.gatt.connected) {
-                bluetoothDevice.gatt.disconnect();
-            }
-            onDisconnected();
-        }
-
-        function onDisconnected() {
-            setBleState('disconnected');
-            bluetoothDevice = null;
-            bleCharacteristic = null;
-            isSimulationMode = false;
-            document.getElementById('demoBadge').classList.add('hidden');
-            logEvent('Соединение с LEGO Boost разорвано.', 'warn');
-        }
-
-        function setBleState(state) {
-            connectionState = state;
-            const btn = document.getElementById('bleToggleBtn');
-            const icon = document.getElementById('bleIcon');
-            const text = document.getElementById('bleText');
-            const subtext = document.getElementById('hubStatusSubtext');
-
-            btn.className = 'w-14 h-14 rounded-xl flex flex-col items-center justify-center transition-all shadow-md cursor-pointer border ';
-
-            if (state === 'connected') {
-                btn.classList.add('bg-emerald-500', 'hover:bg-emerald-400', 'border-emerald-300');
-                icon.className = 'fa-brands fa-bluetooth-b text-xl text-slate-950';
-                text.textContent = isSimulationMode ? 'Sim' : 'On';
-                text.className = 'text-[10px] font-extrabold mt-0.5 text-slate-950';
-                subtext.textContent = isSimulationMode
-                    ? 'Режим симуляции • Калибровка и сборка доступны'
-                    : 'Подключено к LEGO Boost Move Hub';
-            } else if (state === 'connecting') {
-                btn.classList.add('bg-blue-600', 'border-blue-400', 'blinking-blue');
-                icon.className = 'fa-brands fa-bluetooth-b text-xl text-white';
-                text.textContent = 'Sync';
-                text.className = 'text-[10px] font-bold mt-0.5 text-white';
-                subtext.textContent = 'Установка Bluetooth-соединения...';
-            } else {
-                btn.classList.add('bg-orange-600', 'hover:bg-orange-500', 'border-orange-400/70');
-                icon.className = 'fa-brands fa-bluetooth-b text-xl text-white';
-                text.textContent = 'Off';
-                text.className = 'text-[10px] font-bold mt-0.5 text-white';
-                subtext.textContent = 'LEGO Boost (17101) • Камера + Web Bluetooth';
-            }
-        }
-
-        async function sendBleCommand(bytes, label = '') {
-            if (label) {
-                logEvent(`Команда [${label}]: [${bytes.map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ')}]`, 'ble');
-            }
-            if (!bleCharacteristic || connectionState !== 'connected' || isSimulationMode) {
-                return;
-            }
-            try {
-                await bleCharacteristic.writeValue(new Uint8Array(bytes));
-            } catch (err) {
-                logEvent(`Ошибка отправки BLE команды: ${err.message}`, 'error');
-            }
-        }
-
-        /**
-         * Sends motor power (-100..100) to a given port (0=A, 1=B, 2=C, 3=D)
-         */
-        async function setMotorPower(port, signedPower) {
-            const clamped = Math.max(-100, Math.min(100, Math.round(signedPower)));
-            const powerByte = clamped < 0 ? (256 + clamped) : clamped;
-            // LPF2 Port Output Command: start power on port
-            const cmd = [0x06, 0x00, 0x81, port, 0x11, 0x01, powerByte];
-            await sendBleCommand(cmd, `Port ${port} PWM=${clamped}%`);
-        }
-
-        /**
-         * Immediately halts all motors and aborts any active calibration or solve sequence
-         */
-        async function emergencyStop() {
-            emergencyStopFlag = true;
-            clawCalibration.isRunning = false;
-            clawCalibration.phase = 'aborted';
-            updateClawCalibrationUI();
-
-            // Stop all ports A, B, C, D
-            for (let p = 0; p <= 3; p++) {
-                await setMotorPower(p, 0);
-            }
-            logEvent('ЭКСТРЕННЫЙ СТОП: все моторы остановлены!', 'error');
-            showModal('Аварийный СТОП', 'Все моторы немедленно остановлены, активные процессы прерваны.', 'warning');
-        }
-
-        // =========================================================================
-        // 4. AUTOMATIC CLAW CALIBRATION BY MOTOR RESISTANCE / STALL DETECTION
-        // =========================================================================
-        function updateCalSettingsFromUI() {
-            clawConfig.autoOnConnect = document.getElementById('autoCalOnConnect').checked;
-            clawConfig.port = parseInt(document.getElementById('clawPortSelect').value, 10);
-            clawConfig.power = parseInt(document.getElementById('stallPowerInput').value, 10);
-            clawConfig.pollIntervalMs = parseInt(document.getElementById('stallIntervalInput').value, 10);
-            clawConfig.stallDeltaDeg = parseInt(document.getElementById('stallDeltaInput').value, 10);
-
-            document.getElementById('stallPowerVal').textContent = `${clawConfig.power}%`;
-            document.getElementById('stallIntervalVal').textContent = `${clawConfig.pollIntervalMs} мс`;
-            document.getElementById('stallDeltaVal').textContent = `${clawConfig.stallDeltaDeg}°`;
-        }
-
-        /**
-         * Polls/estimates motor encoder angle. In real BLE mode it reads tracked angle
-         * updated by notifications or steps proportionally to power & interval;
-         * in simulation mode it models realistic mechanical hard-stops at -145° (closed) and +145° (open).
-         */
-        function pollClawEncoder(directionSign, elapsedMs) {
-            if (isSimulationMode || !bleCharacteristic) {
-                // Simulated mechanical limits: closed = -145 deg, open = +145 deg
-                const simClosedLimit = -145;
-                const simOpenLimit = 145;
-                const degPerSec = (clawConfig.power / 28) * 180;
-                const delta = directionSign * degPerSec * (elapsedMs / 1000);
-
-                let next = clawCalibration.currentAngle + delta;
-                if (directionSign < 0 && next <= simClosedLimit) {
-                    next = simClosedLimit;
-                } else if (directionSign > 0 && next >= simOpenLimit) {
-                    next = simOpenLimit;
-                }
-                clawCalibration.currentAngle = Math.round(next);
-            }
-            document.getElementById('clawCurrentAngle').textContent = `${clawCalibration.currentAngle}°`;
-            return clawCalibration.currentAngle;
-        }
-
-        /**
-         * Drives the claw in `directionSign` (-1 = close toward mechanical stop, +1 = open toward mechanical stop)
-         * until resistance/stall is detected (encoder movement delta < stallDeltaDeg).
-         */
-        async function driveUntilStall(directionSign, phaseName, progressStart, progressEnd) {
-            clawCalibration.phase = phaseName;
-            updateClawCalibrationUI(progressStart);
-
-            const signedPower = directionSign * clawConfig.power;
-            await setMotorPower(clawConfig.port, signedPower);
-
-            let prevAngle = pollClawEncoder(0, 0);
-            let stallHits = 0;
-            const requiredStallHits = 2;
-            const maxDurationMs = 5000;
-            let totalElapsed = 0;
-
-            while (totalElapsed < maxDurationMs) {
-                if (emergencyStopFlag || !clawCalibration.isRunning) {
-                    await setMotorPower(clawConfig.port, 0);
-                    return null;
-                }
-
-                await sleep(clawConfig.pollIntervalMs);
-                totalElapsed += clawConfig.pollIntervalMs;
-
-                const currentAngle = pollClawEncoder(directionSign, clawConfig.pollIntervalMs);
-                const movedDelta = Math.abs(currentAngle - prevAngle);
-
-                const ratio = Math.min(1, totalElapsed / maxDurationMs);
-                const barPct = progressStart + (progressEnd - progressStart) * ratio;
-                updateClawCalibrationUI(barPct);
-
-                if (movedDelta <= clawConfig.stallDeltaDeg) {
-                    stallHits++;
-                    logEvent(`Сопротивление клешни (${phaseName}): Δ=${movedDelta}° (порог ≤${clawConfig.stallDeltaDeg}°), фиксация ${stallHits}/${requiredStallHits}`, 'warn');
-                    if (stallHits >= requiredStallHits) {
-                        await setMotorPower(clawConfig.port, 0);
-                        return currentAngle;
-                    }
-                } else {
-                    stallHits = 0;
-                }
-
-                prevAngle = currentAngle;
-            }
-
-            // Timeout safety stop
-            await setMotorPower(clawConfig.port, 0);
-            return clawCalibration.currentAngle;
-        }
-
-        /**
-         * Full automatic claw calibration sequence:
-         * 1. Drive closed until mechanical resistance/stall -> record closedAngle
-         * 2. Back off slightly to relieve tension
-         * 3. Drive open until opposite mechanical resistance/stall -> record openAngle
-         * 4. Compute span and center/park position, then move to center
-         */
-        async function runClawCalibration() {
-            if (clawCalibration.isRunning) {
-                logEvent('Калибровка клешни уже выполняется.', 'warn');
-                return;
-            }
-
-            updateCalSettingsFromUI();
-            emergencyStopFlag = false;
-            clawCalibration.isRunning = true;
-            clawCalibration.calibrated = false;
-
-            const portLetter = ['A', 'B', 'C', 'D'][clawConfig.port] || 'B';
-            logEvent(`Старт автокалибровки клешни (Port ${portLetter}, мощность ${clawConfig.power}%, порог ${clawConfig.stallDeltaDeg}°)...`, 'ble');
-
-            try {
-                // Step 1: Close until stall
-                const closedStop = await driveUntilStall(-1, 'closing', 5, 42);
-                if (closedStop === null) {
-                    clawCalibration.phase = 'aborted';
-                    updateClawCalibrationUI(0);
-                    return;
-                }
-                clawCalibration.closedAngle = closedStop;
-                logEvent(`Упор ЗАКРЫТО зафиксирован на ${closedStop}°`, 'success');
-
-                // Step 2: Slight relief back-off (+10 deg)
-                clawCalibration.phase = 'backing_off_close';
-                updateClawCalibrationUI(48);
-                await setMotorPower(clawConfig.port, Math.min(100, clawConfig.power));
-                await sleep(220);
-                await setMotorPower(clawConfig.port, 0);
-                pollClawEncoder(+1, 220);
-
-                // Step 3: Open until opposite stall
-                const openStop = await driveUntilStall(+1, 'opening', 52, 88);
-                if (openStop === null) {
-                    clawCalibration.phase = 'aborted';
-                    updateClawCalibrationUI(0);
-                    return;
-                }
-                clawCalibration.openAngle = openStop;
-                logEvent(`Упор ОТКРЫТО зафиксирован на ${openStop}°`, 'success');
-
-                // Step 4: Calculate span & center, then park at center
-                const span = Math.abs(clawCalibration.openAngle - clawCalibration.closedAngle);
-                clawCalibration.centerAngle = Math.round((clawCalibration.closedAngle + clawCalibration.openAngle) / 2);
-                clawCalibration.calibrated = true;
-                clawCalibration.phase = 'centering';
-                updateClawCalibrationUI(95);
-
-                logEvent(`Калибровка завершена: ход ${span}°, центр/парковка ${clawCalibration.centerAngle}°`, 'success');
-                await moveClawToState('center');
-
-                clawCalibration.phase = 'done';
-                updateClawCalibrationUI(100);
-            } catch (err) {
-                logEvent(`Ошибка калибровки клешни: ${err.message}`, 'error');
-                clawCalibration.phase = 'aborted';
-            } finally {
-                clawCalibration.isRunning = false;
-                await setMotorPower(clawConfig.port, 0);
-                updateClawCalibrationUI();
-            }
-        }
-
-        async function moveClawToState(targetState) {
-            if (!clawCalibration.calibrated && targetState !== 'open') {
-                logEvent('Клешня еще не откалибрована — выполняется короткое движение в цель.', 'warn');
-            }
-
-            const targetAngle = targetState === 'closed'
-                ? (clawCalibration.closedAngle ?? -120)
-                : targetState === 'open'
-                    ? (clawCalibration.openAngle ?? 120)
-                    : (clawCalibration.centerAngle ?? 0);
-
-            const diff = targetAngle - clawCalibration.currentAngle;
-            if (Math.abs(diff) <= 2) {
-                logEvent(`Клешня уже в положении "${targetState}" (${clawCalibration.currentAngle}°).`, 'info');
-                return;
-            }
-
-            const dir = diff > 0 ? 1 : -1;
-            const moveMs = Math.min(1800, Math.max(150, Math.round((Math.abs(diff) / 180) * 1000)));
-
-            await setMotorPower(clawConfig.port, dir * Math.max(22, clawConfig.power));
-            await sleep(moveMs);
-            await setMotorPower(clawConfig.port, 0);
-
-            pollClawEncoder(dir, moveMs);
-            logEvent(`Клешня перемещена в "${targetState}" (цель ${targetAngle}°, текущее ${clawCalibration.currentAngle}°).`, 'info');
-        }
-
-        function updateClawCalibrationUI(progressPercent = null) {
-            const badge = document.getElementById('clawCalBadge');
-            const phaseEl = document.getElementById('clawCalPhaseText');
-            const barEl = document.getElementById('clawCalProgressBar');
-            const closedEl = document.getElementById('clawClosedAngle');
-            const openEl = document.getElementById('clawOpenAngle');
-            const spanEl = document.getElementById('clawSpanAngle');
-            const currEl = document.getElementById('clawCurrentAngle');
-            const runBtn = document.getElementById('runCalBtn');
-
-            const phaseLabels = {
-                idle: 'Ожидание',
-                closing: 'Поиск упора ЗАКРЫТО...',
-                backing_off_close: 'Снятие натяга...',
-                opening: 'Поиск упора ОТКРЫТО...',
-                centering: 'Возврат в центр...',
-                done: 'Откалибровано',
-                aborted: 'Прервано'
-            };
-
-            phaseEl.textContent = phaseLabels[clawCalibration.phase] || clawCalibration.phase;
-            currEl.textContent = `${clawCalibration.currentAngle}°`;
-
-            if (clawCalibration.closedAngle !== null) closedEl.textContent = `${clawCalibration.closedAngle}°`;
-            if (clawCalibration.openAngle !== null) openEl.textContent = `${clawCalibration.openAngle}°`;
-            if (clawCalibration.closedAngle !== null && clawCalibration.openAngle !== null) {
-                spanEl.textContent = `${Math.abs(clawCalibration.openAngle - clawCalibration.closedAngle)}°`;
-            }
-
-            if (progressPercent !== null) {
-                barEl.style.width = `${Math.max(0, Math.min(100, progressPercent))}%`;
-            } else if (clawCalibration.calibrated && !clawCalibration.isRunning) {
-                barEl.style.width = '100%';
-            }
-
-            if (clawCalibration.isRunning) {
-                badge.textContent = 'Калибровка...';
-                badge.className = 'text-[10px] font-bold uppercase px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 blinking-blue';
-                runBtn.disabled = true;
-                runBtn.classList.add('opacity-60');
-            } else if (clawCalibration.calibrated) {
-                badge.textContent = 'Готово';
-                badge.className = 'text-[10px] font-bold uppercase px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
-                runBtn.disabled = false;
-                runBtn.classList.remove('opacity-60');
-            } else {
-                badge.textContent = clawCalibration.phase === 'aborted' ? 'Прервано' : 'Не откалибровано';
-                badge.className = 'text-[10px] font-bold uppercase px-2 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700';
-                runBtn.disabled = false;
-                runBtn.classList.remove('opacity-60');
-            }
-        }
-
-        // =========================================================================
-        // 5. CAMERA FEED & 3x3 COLOR SAMPLING
-        // =========================================================================
-        async function toggleCameraFeed() {
-            const video = document.getElementById('webcamVideo');
-            const placeholder = document.getElementById('camPlaceholder');
-            const btn = document.getElementById('camToggleBtn');
-
-            if (isCameraActive) {
-                if (videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
-                }
-                video.srcObject = null;
-                placeholder.classList.remove('hidden');
-                btn.textContent = 'Включить';
-                btn.className = 'text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer';
-                isCameraActive = false;
-                logEvent('Камера выключена.', 'info');
-            } else {
-                try {
-                    videoStream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: currentFacingMode, width: { ideal: 640 }, height: { ideal: 480 } },
-                        audio: false
-                    });
-                    video.srcObject = videoStream;
-                    placeholder.classList.add('hidden');
-                    btn.textContent = 'Выключить';
-                    btn.className = 'text-xs bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer';
-                    isCameraActive = true;
-                    logEvent(`Камера (${currentFacingMode}) запущена.`, 'success');
-                    startColorSamplingLoop();
-                } catch (err) {
-                    logEvent(`Ошибка доступа к камере: ${err.message}`, 'error');
-                    showModal('Ошибка камеры', 'Не удалось получить доступ к камере устройства. Проверьте разрешения браузера.', 'error');
-                }
-            }
-        }
-
-        async function switchCamera() {
-            currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
-            if (isCameraActive) {
-                await toggleCameraFeed();
-                await toggleCameraFeed();
-            } else {
-                logEvent(`Выбран режим камеры: ${currentFacingMode}`, 'info');
-            }
-        }
-
-        function startColorSamplingLoop() {
-            const video = document.getElementById('webcamVideo');
-            const canvas = document.getElementById('visionCanvas');
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-            function sampleFrame() {
-                if (!isCameraActive) return;
-
-                if (video.videoWidth > 0 && video.videoHeight > 0) {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                    const startX = canvas.width * 0.22;
-                    const startY = canvas.height * 0.22;
-                    const stepX = (canvas.width * 0.56) / 3;
-                    const stepY = (canvas.height * 0.56) / 3;
-
-                    const sampleCells = document.querySelectorAll('.sample-cell');
-                    const detected = [];
-
-                    let idx = 0;
-                    for (let r = 0; r < 3; r++) {
-                        for (let c = 0; c < 3; c++) {
-                            const px = Math.floor(startX + c * stepX + stepX / 2);
-                            const py = Math.floor(startY + r * stepY + stepY / 2);
-                            const [red, green, blue] = ctx.getImageData(px, py, 1, 1).data;
-                            const code = classifyColor(red, green, blue);
-                            detected.push(code);
-
-                            if (sampleCells[idx]) {
-                                sampleCells[idx].style.backgroundColor = `${colorMapHex[code]}55`;
-                            }
-                            idx++;
-                        }
-                    }
-
-                    liveSampledColors = detected;
-                    updateLivePreviewBars(detected);
-                }
-
-                if (isCameraActive) {
-                    requestAnimationFrame(sampleFrame);
-                }
-            }
-
-            requestAnimationFrame(sampleFrame);
-        }
-
-        function classifyColor(r, g, b) {
-            const max = Math.max(r, g, b);
-            const min = Math.min(r, g, b);
-            const sat = max === 0 ? 0 : (max - min) / max;
-
-            if (sat < 0.22 && r > 175 && g > 175 && b > 175) return 'W'; // White
-            if (r > 185 && g > 170 && b < 95) return 'Y';                // Yellow
-            if (r > 165 && g < 85 && b < 85) return 'R';                  // Red
-            if (r > 180 && g >= 85 && g <= 165 && b < 75) return 'O';     // Orange
-            if (g > r && g > b && g > 110) return 'G';                    // Green
-            if (b > r && b > g && b > 110) return 'B';                    // Blue
-            return 'W';
-        }
-
-        function updateLivePreviewBars(colors) {
-            const container = document.getElementById('liveColorsPreview');
-            container.innerHTML = '';
-            colors.forEach(code => {
-                const div = document.createElement('div');
-                div.className = 'w-5 h-5 rounded border border-slate-700 shadow-sm';
-                div.style.backgroundColor = colorMapHex[code] || '#334155';
-                container.appendChild(div);
-            });
-        }
-
-        // =========================================================================
-        // 6. SCANNING WIZARD, CUBE NET EDITOR, SOLVER & MOTOR CALIBRATION
-        // =========================================================================
-        function captureCurrentFace() {
-            const faceKey = faceKeys[currentScanStep];
-            const sourceColors = isCameraActive ? [...liveSampledColors] : [...cubeData[faceKey]];
-            cubeData[faceKey] = sourceColors;
-
-            const badge = document.getElementById(`faceStatus${currentScanStep}`);
-            badge.classList.remove('bg-slate-800', 'text-slate-300', 'border-slate-700');
-            badge.classList.add('bg-emerald-600', 'text-white', 'border-emerald-400');
-
-            logEvent(`Грань ${faceNames[currentScanStep]} зафиксирована: [${sourceColors.join(', ')}]`, 'success');
-
-            currentScanStep = (currentScanStep + 1) % 6;
-            document.getElementById('currentFaceInstruction').innerHTML = `Грань: <span class="text-amber-400 uppercase">${faceNames[currentScanStep]}</span>`;
-            document.getElementById('scanStepBadge').textContent = `Шаг ${currentScanStep + 1} из 6`;
-            renderCubeNet();
-        }
-
-        async function rotateToNextFaceRobot() {
-            const angle = motorAngles.B;
-            await setMotorPower(2, 35);
-            await sleep(Math.round((angle / 90) * 350));
-            await setMotorPower(2, 0);
-            logEvent(`Поворот стола кубика на ${angle}° для следующей грани.`, 'info');
-        }
-
-        function selectBrush(code) {
-            activeBrush = code;
-            document.querySelectorAll('.brush-btn').forEach(btn => {
-                if (btn.dataset.brush === code) {
-                    btn.classList.add('border-amber-400', 'scale-110');
-                    btn.classList.remove('border-transparent');
-                } else {
-                    btn.classList.remove('border-amber-400', 'scale-110');
-                    btn.classList.add('border-transparent');
-                }
-            });
-        }
-
-        function renderCubeNet() {
-            faceKeys.forEach(key => {
-                const container = document.getElementById(`netFace-${key}`);
-                if (!container) return;
-                container.innerHTML = '';
-
-                cubeData[key].forEach((code, idx) => {
-                    const cell = document.createElement('button');
-                    cell.type = 'button';
-                    cell.className = 'w-4 h-4 sm:w-5 sm:h-5 rounded-[3px] border border-black/30 cursor-pointer transition hover:scale-105';
-                    cell.style.backgroundColor = colorMapHex[code] || '#64748b';
-                    cell.title = `${key}[${idx}] = ${code} (нажмите для покраски)`;
-                    cell.onclick = () => {
-                        cubeData[key][idx] = activeBrush;
-                        renderCubeNet();
-                    };
-                    container.appendChild(cell);
-                });
-            });
-        }
-
-        function scrambleCubePreview() {
-            const palette = ['W', 'Y', 'R', 'O', 'G', 'B'];
-            faceKeys.forEach(key => {
-                cubeData[key] = Array.from({ length: 9 }, () => palette[Math.floor(Math.random() * palette.length)]);
-            });
-            renderCubeNet();
-            logEvent('Развертка заполнена случайными цветами для теста.', 'info');
-        }
-
-        function resetCubeData() {
-            currentScanStep = 0;
-            cubeData = {
-                U: Array(9).fill('W'),
-                R: Array(9).fill('R'),
-                F: Array(9).fill('G'),
-                D: Array(9).fill('Y'),
-                L: Array(9).fill('O'),
-                B: Array(9).fill('B')
-            };
-            document.getElementById('currentFaceInstruction').innerHTML = `Грань: <span class="text-amber-400 uppercase">${faceNames[0]}</span>`;
-            document.getElementById('scanStepBadge').textContent = 'Шаг 1 из 6';
-            for (let i = 0; i < 6; i++) {
-                const badge = document.getElementById(`faceStatus${i}`);
-                badge.className = 'h-8 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-xs font-bold border border-slate-700';
-            }
-            document.getElementById('moveSequenceBox').innerHTML = 'Нажмите «Рассчитать и собрать» для генерации ходов';
-            document.getElementById('moveCountBadge').textContent = '0 шагов';
-            renderCubeNet();
-            logEvent('Состояние кубика сброшено в собранное положение.', 'info');
-        }
-
-        async function startAutoSolve() {
-            emergencyStopFlag = false;
-            const sampleSequence = ['R', 'U', "R'", "U'", 'F2', 'D', 'L', "U'"];
-            document.getElementById('moveCountBadge').textContent = `${sampleSequence.length} шагов`;
-
-            const seqBox = document.getElementById('moveSequenceBox');
-            seqBox.innerHTML = '';
-            sampleSequence.forEach((move, i) => {
-                const chip = document.createElement('span');
-                chip.id = `moveChip-${i}`;
-                chip.className = 'px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700 font-mono text-xs font-bold';
-                chip.textContent = move;
-                seqBox.appendChild(chip);
-            });
-
-            logEvent(`Сформирована последовательность из ${sampleSequence.length} ходов: ${sampleSequence.join(' ')}`, 'success');
-
-            for (let i = 0; i < sampleSequence.length; i++) {
-                if (emergencyStopFlag) {
-                    logEvent('Сборка прервана сигналом СТОП.', 'warn');
-                    return;
-                }
-                const chip = document.getElementById(`moveChip-${i}`);
-                if (chip) chip.className = 'px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-mono text-xs font-extrabold';
-
-                // Grip -> turn face -> release using calibrated claw
-                await moveClawToState('closed');
-                await setMotorPower(0, 35);
-                await sleep(240);
-                await setMotorPower(0, 0);
-                await moveClawToState('open');
-
-                if (chip) chip.className = 'px-2 py-0.5 rounded bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 font-mono text-xs font-bold';
-            }
-
-            await moveClawToState('center');
-            logEvent('Последовательность сборки выполнена.', 'success');
-        }
-
-        function updateMotorAngle(motor, val) {
-            motorAngles[motor] = parseInt(val, 10);
-            document.getElementById(`angle${motor}Val`).textContent = `${val}°`;
-        }
-
-        async function testMotor(motor) {
-            const port = motor === 'A' ? 0 : 2;
-            const angle = motorAngles[motor];
-            const duration = Math.max(150, Math.round((angle / 90) * 350));
-            logEvent(`Тест мотора ${motor} (Port ${port}) на ${angle}°...`, 'info');
-            await setMotorPower(port, 35);
-            await sleep(duration);
-            await setMotorPower(port, 0);
-        }
-
-        function sleep(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
-
-        // Initialize UI on load
-        window.onload = function () {
-            updateCalSettingsFromUI();
-            updateClawCalibrationUI(0);
-            renderCubeNet();
-            logEvent('Интерфейс инициализирован.', 'info');
-        };
-    </script>
+      }
+
+      cubeState[faceKey] = detected;
+      log(`Грань ${faceKey} отсканирована: ${detected.join(" ")}`);
+      if (currentFaceIndex < FACE_NAMES.length - 1) {
+        currentFaceIndex++;
+      }
+      renderCubeNet();
+    }
+
+    elBtnConnect.addEventListener("click", connectBluetooth);
+    elBtnStop.addEventListener("click", emergencyStop);
+    elBtnRecal.addEventListener("click", autoCalibrateClaw);
+    elBtnTestClose.addEventListener("click", async () => {
+      stopRequested = false;
+      const pos = await driveUntilStall(PORT_CLAW, -35, 3000);
+      log(`Клешня закрыта до упора (${pos}°).`);
+    });
+    elBtnTestOpen.addEventListener("click", async () => {
+      stopRequested = false;
+      const pos = await driveUntilStall(PORT_CLAW, 35, 3000);
+      log(`Клешня открыта до упора (${pos}°).`);
+    });
+    document.getElementById("btnStartCamera").addEventListener("click", startCamera);
+    document.getElementById("btnScanFace").addEventListener("click", scanCurrentFace);
+    document.getElementById("btnResetCube").addEventListener("click", () => {
+      FACE_NAMES.forEach(f => { cubeState[f] = Array(9).fill("?"); });
+      currentFaceIndex = 0;
+      renderCubeNet();
+      log("Развертка кубика сброшена.");
+    });
+
+    initUI();
+  </script>
 </body>
 </html>
