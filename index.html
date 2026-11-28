@@ -580,4 +580,551 @@
 
       async function driveClawUntilStall(power, maxMs = 2800) {
         if (state.demoMode) {
-          await
+          await sleep(350);
+          return power > 0 ? 68 : 0;
+        }
+        await setMotorPower(PORTS.B, power);
+        const startTs = performance.now();
+        let prevAngle = state.clawAngleB;
+        let stallTs = null;
+
+        while (!state.emergencyStop && (performance.now() - startTs) < maxMs) {
+          await sleep(75);
+          const cur = state.clawAngleB;
+          if (Math.abs(cur - prevAngle) <= 2) {
+            if (stallTs === null) stallTs = performance.now();
+            if ((performance.now() - stallTs) >= 280) {
+              await setMotorPower(PORTS.B, 0);
+              return cur;
+            }
+          } else {
+            prevAngle = cur;
+            stallTs = null;
+          }
+        }
+        await setMotorPower(PORTS.B, 0);
+        return state.clawAngleB;
+      }
+
+      window.calibrateClawByResistance = async function () {
+        if (state.btStatus !== "connected" || state.emergencyStop) return;
+        const hubStatusText = $("hubStatusText");
+        const clawCalibInfo = $("clawCalibInfo");
+        logMsg("Клешня (Порт B): автокалибровка крайних положений...");
+        if (hubStatusText) hubStatusText.textContent = "Калибровка клешни...";
+        if (clawCalibInfo) clawCalibInfo.textContent = "Поиск упоров...";
+
+        try {
+          if (!state.demoMode && state.characteristic) {
+            // Port Input Format Setup (0x41) для Порта B, режим 0x02 (POS) с уведомлениями
+            await sendLwpPacket([0x0a, 0x00, 0x41, PORTS.B, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01]);
+            await sleep(150);
+          }
+
+          const dirSign = state.config.invB ? -1 : 1;
+          const calPower = 35;
+
+          // 1. Разжимаем клешню до механического упора
+          const openPos = await driveClawUntilStall(-dirSign * calPower, 2800);
+          if (state.emergencyStop) return;
+          await sleep(180);
+
+          // 2. Зажимаем клешню до механического упора
+          const closedPos = await driveClawUntilStall(dirSign * calPower, 2800);
+          if (state.emergencyStop) return;
+
+          const travelDeg = Math.max(20, Math.min(180, Math.abs(closedPos - openPos)));
+          state.clawCalib = { openPos, closedPos, calibrated: true };
+          state.config.degB = Math.round(travelDeg);
+          saveConfig();
+          syncSettingsUI();
+
+          // 3. Возвращаем клешню в исходное разжатое положение
+          await sleep(150);
+          await rotateMotorDegrees(PORTS.B, -state.config.degB, state.config.spdB, state.config.invB);
+
+          const infoStr = `Упоры: ${openPos}° ↔ ${closedPos}° (ход ${state.config.degB}°)`;
+          if (clawCalibInfo) clawCalibInfo.textContent = infoStr;
+          if (hubStatusText) {
+            hubStatusText.textContent = state.demoMode
+              ? `Демо: клешня откалибрована (${state.config.degB}°)`
+              : `Move Hub готов (клешня ${state.config.degB}°)`;
+          }
+          logMsg("Клешня откалибрована: " + infoStr);
+        } catch (err) {
+          logMsg("Ошибка калибровки клешни: " + (err && err.message ? err.message : err));
+          if (clawCalibInfo) clawCalibInfo.textContent = "Ошибка калибровки";
+        }
+      };
+
+      // --- ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ КНОПОК ---
+      window.openSettingsModal = function () {
+        const modal = $("settingsModal");
+        if (modal) {
+          modal.classList.remove("hidden");
+          modal.classList.add("flex");
+        }
+      };
+
+      window.closeSettingsModal = function () {
+        const modal = $("settingsModal");
+        if (modal) {
+          modal.classList.add("hidden");
+          modal.classList.remove("flex");
+        }
+      };
+
+      window.toggleDemoMode = function () {
+        state.demoMode = !state.demoMode;
+        const btn = $("btnDemoToggle");
+        if (btn) {
+          btn.textContent = state.demoMode ? "Демо: ВКЛ" : "Демо: ВЫКЛ";
+          btn.classList.toggle("text-emerald-400", state.demoMode);
+        }
+        logMsg("Демо-режим: " + (state.demoMode ? "ВКЛЮЧЕН" : "ВЫКЛЮЧЕН"));
+      };
+
+      window.handleBtClick = async function () {
+        if (state.btStatus === "connected") {
+          if (state.device && state.device.gatt && state.device.gatt.connected) {
+            state.device.gatt.disconnect();
+          }
+          state.characteristic = null;
+          setBtStatus("disconnected");
+          logMsg("BT отключен пользователем");
+          return;
+        }
+
+        state.emergencyStop = false;
+
+        if (state.demoMode) {
+          setBtStatus("connecting");
+          logMsg("Демо: имитация поиска хаба...");
+          setTimeout(async () => {
+            setBtStatus("connected");
+            logMsg("Демо: виртуальный Move Hub подключен");
+            await window.calibrateClawByResistance();
+          }, 600);
+          return;
+        }
+
+        if (!navigator.bluetooth) {
+          setBtStatus("connecting");
+          setTimeout(() => {
+            setBtStatus("disconnected");
+            alert("Web Bluetooth недоступен в этом окне/браузере. Откройте сайт на GitHub Pages в Chrome/Edge по HTTPS или включите «Демо: ВКЛ» по центру верхней панели.");
+          }, 400);
+          logMsg("Ошибка: navigator.bluetooth недоступен");
+          return;
+        }
+
+        try {
+          setBtStatus("connecting");
+          logMsg("Запрос устройства BLE (LWP 3.0)...");
+          const device = await navigator.bluetooth.requestDevice({
+            filters: [{ services: [LWP_SERVICE_UUID] }]
+          });
+
+          state.device = device;
+          device.addEventListener("gattserverdisconnected", () => {
+            state.characteristic = null;
+            setBtStatus("disconnected");
+            logMsg("Потеряно соединение с хабом!");
+          });
+
+          const server = await device.gatt.connect();
+          const service = await server.getPrimaryService(LWP_SERVICE_UUID);
+          const char = await service.getCharacteristic(LWP_CHAR_UUID);
+          state.characteristic = char;
+
+          try {
+            await char.startNotifications();
+            char.addEventListener("characteristicvaluechanged", handleLwpNotification);
+          } catch (notifErr) {
+            logMsg("Предупреждение уведомлений BLE: " + notifErr.message);
+          }
+
+          setBtStatus("connected");
+          logMsg("Подключено к " + (device.name || "LEGO Move Hub"));
+          await window.calibrateClawByResistance();
+        } catch (err) {
+          setBtStatus("disconnected");
+          logMsg("BT отмена/ошибка: " + (err && err.message ? err.message : err));
+        }
+      };
+
+      async function sendLwpPacket(bytes) {
+        const packet = new Uint8Array(bytes);
+        logMsg("TX -> " + toHex(packet));
+        if (state.demoMode || !state.characteristic) return;
+        try {
+          await state.characteristic.writeValue(packet);
+        } catch (e) {
+          logMsg("Ошибка TX: " + e.message);
+        }
+      }
+
+      function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      async function rotateMotorDegrees(portId, degrees, speed, invert) {
+        if (state.emergencyStop) return;
+        const signedDeg = Math.round(invert ? -degrees : degrees);
+        if (signedDeg === 0) return;
+
+        const absDeg = Math.abs(signedDeg);
+        const dirSpeed = signedDeg >= 0 ? Math.abs(speed) : -Math.abs(speed);
+        const speedByte = dirSpeed < 0 ? 256 + dirSpeed : dirSpeed;
+
+        const d0 = absDeg & 0xff;
+        const d1 = (absDeg >> 8) & 0xff;
+        const d2 = (absDeg >> 16) & 0xff;
+        const d3 = (absDeg >> 24) & 0xff;
+
+        const cmd = [0x0e, 0x00, 0x81, portId, 0x11, 0x0b, d0, d1, d2, d3, speedByte, 0x64, 0x7f, 0x00];
+        await sendLwpPacket(cmd);
+        const estMs = Math.min(2500, Math.max(220, Math.round((absDeg / Math.max(20, Math.abs(speed))) * 220)));
+        await sleep(estMs);
+      }
+
+      window.emergencyStopAll = async function () {
+        state.emergencyStop = true;
+        state.autoSolving = false;
+        logMsg("!!! АВАРИЙНЫЙ СТОП ВСЕХ МОТОРОВ !!!");
+        for (const p of [PORTS.A, PORTS.B, PORTS.C]) {
+          await sendLwpPacket([0x06, 0x00, 0x81, p, 0x11, 0x51, 0x00]);
+        }
+        const stage = $("autoStageText");
+        if (stage) stage.textContent = "Остановлено кнопкой STOP";
+      };
+
+      // --- УПРАВЛЕНИЕ МЕХАНИКОЙ (ПОРТЫ A, B, C) ---
+      window.pushTrolleyA = () => rotateMotorDegrees(PORTS.A, state.config.degA, state.config.spdA, state.config.invA);
+      window.retractTrolleyA = () => rotateMotorDegrees(PORTS.A, -state.config.degA, state.config.spdA, state.config.invA);
+      window.flipCubeCycle = async () => {
+        state.emergencyStop = false;
+        await window.pushTrolleyA();
+        await sleep(120);
+        await window.retractTrolleyA();
+      };
+
+      window.clampClawB = () => rotateMotorDegrees(PORTS.B, state.config.degB, state.config.spdB, state.config.invB);
+      window.releaseClawB = () => rotateMotorDegrees(PORTS.B, -state.config.degB, state.config.spdB, state.config.invB);
+
+      window.rotatePlatformC = async (quarterTurns) => {
+        state.emergencyStop = false;
+        const baseDeg = quarterTurns * state.config.calib90C * state.config.gearC;
+        const backlash = quarterTurns >= 0 ? state.config.backlashC : -state.config.backlashC;
+        await rotateMotorDegrees(PORTS.C, baseDeg + backlash, state.config.spdC, state.config.invC);
+        if (state.config.backlashC > 0) {
+          await rotateMotorDegrees(PORTS.C, -backlash, Math.max(25, state.config.spdC - 15), state.config.invC);
+        }
+      };
+
+      // --- КАМЕРА И РАСПОЗНАВАНИЕ ЦВЕТОВ ---
+      window.startCamera = async function () {
+        if (state.mediaStream) return;
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 640 } },
+            audio: false
+          });
+          state.mediaStream = stream;
+          const video = $("cameraVideo");
+          if (video) video.srcObject = stream;
+          const ph = $("cameraPlaceholder");
+          if (ph) ph.classList.add("hidden");
+
+          const chk = $("chkAutoFlash");
+          if (chk && chk.checked && !state.torchOn) {
+            await window.toggleTorch(true);
+          }
+          startLivePreviewLoop();
+          logMsg("Камера активирована");
+        } catch (e) {
+          logMsg("Камера недоступна: " + e.message);
+        }
+      };
+
+      window.stopCamera = function () {
+        if (state.liveTimer) {
+          clearInterval(state.liveTimer);
+          state.liveTimer = null;
+        }
+        if (state.mediaStream) {
+          state.mediaStream.getTracks().forEach((t) => t.stop());
+          state.mediaStream = null;
+        }
+        state.torchOn = false;
+        const btnFlash = $("btnFlash");
+        if (btnFlash) btnFlash.textContent = "Вспышка: ВЫКЛ";
+        const ph = $("cameraPlaceholder");
+        if (ph) ph.classList.remove("hidden");
+      };
+
+      window.toggleTorch = async function (forceState) {
+        if (!state.mediaStream) return;
+        const track = state.mediaStream.getVideoTracks()[0];
+        if (!track || !track.getCapabilities) return;
+        const caps = track.getCapabilities();
+        if (!caps.torch) return;
+        const next = typeof forceState === "boolean" ? forceState : !state.torchOn;
+        try {
+          await track.applyConstraints({ advanced: [{ torch: next }] });
+          state.torchOn = next;
+          const btnFlash = $("btnFlash");
+          if (btnFlash) btnFlash.textContent = "Вспышка: " + (next ? "ВКЛ" : "ВЫКЛ");
+        } catch (e) {}
+      };
+
+      function classifyRgb(r, g, b) {
+        let best = "W";
+        let minDist = Infinity;
+        for (const key of COLOR_CYCLE) {
+          const [cr, cg, cb] = COLORS[key].rgb;
+          const dist = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2;
+          if (dist < minDist) {
+            minDist = dist;
+            best = key;
+          }
+        }
+        return best;
+      }
+
+      function sampleVideoGrid() {
+        const video = $("cameraVideo");
+        const canvas = $("captureCanvas");
+        if (!video || !canvas || video.readyState < 2) return null;
+        const size = 180;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(video, 0, 0, size, size);
+
+        const detected = [];
+        for (let row = 0; row < 3; row++) {
+          for (let col = 0; col < 3; col++) {
+            const cx = Math.round(((col + 0.5) / 3) * size);
+            const cy = Math.round(((row + 0.5) / 3) * size);
+            const data = ctx.getImageData(cx - 4, cy - 4, 8, 8).data;
+            let r = 0, g = 0, b = 0, n = 0;
+            for (let i = 0; i < data.length; i += 4) {
+              r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
+            }
+            const code = classifyRgb(r / n, g / n, b / n);
+            detected.push(code);
+            const dot = $("liveDot" + (row * 3 + col));
+            if (dot) dot.style.backgroundColor = COLORS[code].hex;
+          }
+        }
+        state.liveColors = detected;
+        return detected;
+      }
+
+      function startLivePreviewLoop() {
+        if (state.liveTimer) clearInterval(state.liveTimer);
+        state.liveTimer = setInterval(sampleVideoGrid, 220);
+      }
+
+      window.captureCurrentFace = function () {
+        const sampled = sampleVideoGrid() || state.liveColors;
+        state.cubeNet[state.activeFace] = sampled.slice();
+        renderAllCubeViews();
+        logMsg(`Грань ${state.activeFace} считана: ${sampled.join("")}`);
+      };
+
+      window.fillDemoCube = function () {
+        state.cubeNet = {
+          U: Array(9).fill("W"),
+          L: Array(9).fill("O"),
+          F: Array(9).fill("G"),
+          R: Array(9).fill("R"),
+          B: Array(9).fill("B"),
+          D: Array(9).fill("Y")
+        };
+        renderAllCubeViews();
+        logMsg("Заполнена тестовая собранная развертка");
+      };
+
+      window.clearCubeNet = function () {
+        for (const f of Object.keys(state.cubeNet)) {
+          state.cubeNet[f] = Array(9).fill("X");
+        }
+        renderAllCubeViews();
+      };
+
+      function renderAllCubeViews() {
+        document.querySelectorAll(".face-box").forEach((box) => {
+          const f = box.dataset.face;
+          box.classList.toggle("active-face", f === state.activeFace);
+          box.innerHTML = "";
+          state.cubeNet[f].forEach((c) => {
+            const s = document.createElement("div");
+            s.className = "sticker";
+            s.style.backgroundColor = COLORS[c].hex;
+            box.appendChild(s);
+          });
+        });
+
+        const badge = $("activeFaceBadge");
+        if (badge) badge.textContent = state.activeFace;
+        const title = $("selectedFaceTitle");
+        if (title) title.textContent = FACE_NAMES[state.activeFace];
+
+        const editor = $("activeFaceEditor");
+        if (editor) {
+          editor.innerHTML = "";
+          state.cubeNet[state.activeFace].forEach((c, idx) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "aspect-square rounded-md border border-slate-600 cursor-pointer";
+            btn.style.backgroundColor = COLORS[c].hex;
+            btn.onclick = () => {
+              const nextIdx = (COLOR_CYCLE.indexOf(c) + 1) % COLOR_CYCLE.length;
+              state.cubeNet[state.activeFace][idx] = COLOR_CYCLE[nextIdx];
+              renderAllCubeViews();
+            };
+            editor.appendChild(btn);
+          });
+        }
+
+        const counts = { W: 0, Y: 0, R: 0, O: 0, B: 0, G: 0 };
+        let filled = 0;
+        for (const f of Object.keys(state.cubeNet)) {
+          for (const c of state.cubeNet[f]) {
+            if (counts[c] !== undefined) {
+              counts[c]++;
+              filled++;
+            }
+          }
+        }
+        const countersEl = $("colorCounters");
+        if (countersEl) {
+          countersEl.innerHTML = COLOR_CYCLE.map(
+            (k) => `<span style="color:${COLORS[k].hex}">${k}:${counts[k]}</span>`
+          ).join("");
+        }
+        const valBadge = $("validationBadge");
+        if (valBadge) {
+          const valid = filled === 54 && COLOR_CYCLE.every((k) => counts[k] === 9);
+          valBadge.textContent = valid ? "Готово (54/54)" : `Заполнено ${filled}/54`;
+          valBadge.className = valid ? "text-[11px] font-mono text-emerald-400" : "text-[11px] font-mono text-amber-400";
+        }
+      }
+
+      window.runAutoSolvePipeline = async function () {
+        if (state.autoSolving) return;
+        state.emergencyStop = false;
+        state.autoSolving = true;
+
+        const stage = $("autoStageText");
+        const pct = $("autoPercentText");
+        const bar = $("autoProgressBar");
+        const movesBox = $("solveMovesDisplay");
+
+        const setProgress = (p, text) => {
+          if (stage) stage.textContent = text;
+          if (pct) pct.textContent = p + "%";
+          if (bar) bar.style.width = p + "%";
+        };
+
+        try {
+          setProgress(15, "Проверка развертки кубика...");
+          await sleep(300);
+          if (state.emergencyStop) return;
+
+          const demoMoves = ["R", "U", "R'", "U'", "F2", "D", "L'"];
+          if (movesBox) {
+            movesBox.classList.remove("hidden");
+            movesBox.textContent = "Алгоритм: " + demoMoves.join(" ");
+          }
+
+          for (let i = 0; i < demoMoves.length; i++) {
+            if (state.emergencyStop) return;
+            const p = 20 + Math.round(((i + 1) / demoMoves.length) * 80);
+            setProgress(p, `Выполнение хода ${i + 1}/${demoMoves.length}: ${demoMoves[i]}`);
+            await window.clampClawB();
+            await window.rotatePlatformC(demoMoves[i].includes("2") ? 2 : demoMoves[i].includes("'") ? -1 : 1);
+            await window.releaseClawB();
+          }
+
+          setProgress(100, "Кубик собран!");
+          logMsg("Автосборка успешно завершена");
+        } finally {
+          state.autoSolving = false;
+        }
+      };
+
+      function syncSettingsUI() {
+        const bindCheck = (id, key) => {
+          const el = $(id);
+          if (!el) return;
+          el.checked = !!state.config[key];
+          el.onchange = () => { state.config[key] = el.checked; saveConfig(); };
+        };
+        const bindRange = (id, valId, key, suffix = "°") => {
+          const el = $(id);
+          const vEl = $(valId);
+          if (!el) return;
+          el.value = state.config[key];
+          if (vEl) vEl.textContent = state.config[key] + suffix;
+          el.oninput = () => {
+            state.config[key] = Number(el.value);
+            if (vEl) vEl.textContent = state.config[key] + suffix;
+            saveConfig();
+          };
+        };
+
+        bindCheck("invA", "invA");
+        bindRange("rangeDegA", "valDegA", "degA", "°");
+        bindRange("rangeSpdA", "valSpdA", "spdA", "%");
+
+        bindCheck("invB", "invB");
+        bindRange("rangeDegB", "valDegB", "degB", "°");
+        bindRange("rangeSpdB", "valSpdB", "spdB", "%");
+
+        bindCheck("invC", "invC");
+        bindRange("rangeCalib90C", "valCalib90C", "calib90C", "°");
+        bindRange("rangeBacklashC", "valBacklashC", "backlashC", "°");
+        bindRange("rangeSpdC", "valSpdC", "spdC", "%");
+
+        const gearEl = $("gearRatioC");
+        if (gearEl) {
+          gearEl.value = String(state.config.gearC);
+          gearEl.onchange = () => { state.config.gearC = Number(gearEl.value); saveConfig(); };
+        }
+      }
+
+      document.querySelectorAll(".face-box").forEach((box) => {
+        box.addEventListener("click", () => {
+          state.activeFace = box.dataset.face;
+          renderAllCubeViews();
+        });
+      });
+
+      document.querySelectorAll(".preset-a").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          state.config.degA = Number(btn.dataset.deg);
+          state.config.spdA = Number(btn.dataset.spd);
+          saveConfig();
+          syncSettingsUI();
+        });
+      });
+
+      document.querySelectorAll(".nudge-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const p = btn.dataset.port;
+          const d = Number(btn.dataset.delta);
+          if (p === "A") rotateMotorDegrees(PORTS.A, d, state.config.spdA, state.config.invA);
+          if (p === "B") rotateMotorDegrees(PORTS.B, d, state.config.spdB, state.config.invB);
+          if (p === "C") rotateMotorDegrees(PORTS.C, d * state.config.gearC, state.config.spdC, state.config.invC);
+        });
+      });
+
+      syncSettingsUI();
+      renderAllCubeViews();
+    })();
+  </script>
+</body>
+</html>
