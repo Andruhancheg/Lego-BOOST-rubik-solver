@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LEGO Boost Rubik's Cube Solver v0.16</title>
+  <title>LEGO Boost Rubik's Cube Solver v0.17</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -90,6 +90,9 @@
       border-color: #38bdf8;
       box-shadow: 0 0 10px rgba(56, 189, 248, 0.45);
     }
+    .face-box.scanned-face {
+      border-color: #10b981;
+    }
     .sticker {
       border-radius: 2px;
       border: 1px solid rgba(0, 0, 0, 0.4);
@@ -104,10 +107,9 @@
 
   <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
   <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-3 pt-1.5 pb-2.5">
-    <!-- Строка версии выше кнопки STOP -->
     <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1.5 px-1">
-      <span id="appVersion" class="text-sky-400 font-bold">v0.16</span>
-      <span id="jsStatus" class="text-emerald-400">SYSTEM: READY</span>
+      <span id="appVersion" class="text-sky-400 font-bold">v0.17</span>
+      <span id="jsStatus" class="text-emerald-400">SYSTEM: READY (HSV + 6-CENTER CAL)</span>
     </div>
 
     <div class="flex items-center justify-between gap-2">
@@ -132,7 +134,6 @@
 
       <!-- Справа: Шестеренка Settings + Квадратная кнопка BT -->
       <div class="flex items-center gap-2 shrink-0">
-        <!-- Кнопка Settings (левее BT) -->
         <button id="btnOpenSettings" type="button" onclick="window.openSettingsModal()" aria-label="Settings"
           class="w-14 h-14 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-600 flex flex-col items-center justify-center shadow-md cursor-pointer">
           <svg class="no-ptr w-6 h-6 text-slate-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -142,7 +143,6 @@
           <span class="no-ptr text-[9px] text-slate-300 mt-0.5 font-medium">Settings</span>
         </button>
 
-        <!-- Квадратная кнопка BT -->
         <button id="btnBluetooth" type="button" onclick="window.handleBtClick()" aria-label="Bluetooth подключение"
           class="w-14 h-14 rounded-xl bg-orange-500 hover:bg-orange-400 active:scale-95 flex flex-col items-center justify-center shadow-lg transition-colors cursor-pointer">
           <svg class="no-ptr w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
@@ -162,7 +162,7 @@
       <div class="flex items-center justify-between">
         <div>
           <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">1. Камера сканирования</h2>
-          <p class="text-[10px] text-sky-400">Камера сверху (смотрит на верхнюю грань U)</p>
+          <p class="text-[10px] text-sky-400">HSV-анализ + автобаланс по 6 центрам</p>
         </div>
         <div class="flex items-center gap-2">
           <label class="flex items-center gap-1 text-[11px] text-slate-400 cursor-pointer">
@@ -529,13 +529,13 @@
       const PORTS = { A: 0x00, B: 0x01, C: 0x02, D: 0x03 };
 
       const COLORS = {
-        W: { name: "Белый", hex: "#f8fafc", rgb: [240, 240, 240] },
-        Y: { name: "Желтый", hex: "#facc15", rgb: [235, 210, 30] },
-        R: { name: "Красный", hex: "#ef4444", rgb: [215, 45, 45] },
-        O: { name: "Оранжевый", hex: "#f97316", rgb: [235, 115, 30] },
-        B: { name: "Синий", hex: "#2563eb", rgb: [35, 85, 220] },
-        G: { name: "Зеленый", hex: "#16a34a", rgb: [30, 175, 75] },
-        X: { name: "Пусто", hex: "#1e293b", rgb: [30, 41, 59] }
+        W: { name: "Белый", hex: "#f8fafc" },
+        Y: { name: "Желтый", hex: "#facc15" },
+        R: { name: "Красный", hex: "#ef4444" },
+        O: { name: "Оранжевый", hex: "#f97316" },
+        B: { name: "Синий", hex: "#2563eb" },
+        G: { name: "Зеленый", hex: "#16a34a" },
+        X: { name: "Пусто", hex: "#1e293b" }
       };
       const COLOR_CYCLE = ["W", "R", "B", "O", "G", "Y"];
       const SCAN_ORDER = ["U", "F", "R", "B", "L", "D"];
@@ -559,6 +559,17 @@
         };
       }
 
+      function createFreshRawNet() {
+        return {
+          U: null,
+          L: null,
+          F: null,
+          R: null,
+          B: null,
+          D: null
+        };
+      }
+
       const state = {
         btStatus: "disconnected",
         demoMode: false,
@@ -570,11 +581,14 @@
         scanningStepBusy: false,
         scanIndex: 0,
         scanCompleted: false,
+        scannedFaces: { U: false, L: false, F: false, R: false, B: false, D: false },
         isPaused: false,
         mediaStream: null,
         torchOn: false,
         liveTimer: null,
         liveColors: Array(9).fill("X"),
+        liveRawRgb: Array(9).fill(null),
+        rawCapturedRgb: createFreshRawNet(),
         activeFace: "U",
         clawAngleB: 0,
         clawCalib: { openPos: null, closedPos: null, calibrated: false },
@@ -588,13 +602,13 @@
       };
 
       try {
-        const saved = localStorage.getItem("lego_rubik_cfg_v016");
+        const saved = localStorage.getItem("lego_rubik_cfg_v017");
         if (saved) Object.assign(state.config, JSON.parse(saved));
       } catch (e) {}
 
       function saveConfig() {
         try {
-          localStorage.setItem("lego_rubik_cfg_v016", JSON.stringify(state.config));
+          localStorage.setItem("lego_rubik_cfg_v017", JSON.stringify(state.config));
         } catch (e) {}
       }
 
@@ -622,6 +636,112 @@
         if (tone === "done") el.classList.add("text-emerald-400");
         else if (tone === "warn") el.classList.add("text-amber-400");
         else el.classList.add("text-sky-300");
+      }
+
+      // --- КОНВЕРТАЦИЯ RGB -> HSV И УСТОЙЧИВАЯ КЛАССИФИКАЦИЯ ---
+      function rgbToHsv(r, g, b) {
+        const rn = r / 255;
+        const gn = g / 255;
+        const bn = b / 255;
+        const max = Math.max(rn, gn, bn);
+        const min = Math.min(rn, gn, bn);
+        const d = max - min;
+        let h = 0;
+        const s = max === 0 ? 0 : d / max;
+        const v = max;
+
+        if (d !== 0) {
+          if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) * 60;
+          else if (max === gn) h = ((bn - rn) / d + 2) * 60;
+          else h = ((rn - gn) / d + 4) * 60;
+        }
+        return { h, s, v };
+      }
+
+      function classifyRgbHsv(r, g, b) {
+        const { h, s, v } = rgbToHsv(r, g, b);
+
+        // Белый: низкая насыщенность (даже если камера слегка ушла в зеленый/синий оттенок)
+        if (s < 0.28 && v > 0.35) return "W";
+
+        // Классификация по цветовому тону (Hue 0..360)
+        if (h >= 340 || h < 12) return "R";
+        if (h >= 12 && h < 38) return "O";
+        if (h >= 38 && h < 75) return "Y";
+        if (h >= 75 && h < 175) return "G";
+        if (h >= 175 && h < 275) return "B";
+        return "R";
+      }
+
+      // Автокалибровка всех 54 клеток по 6 реальным центрам после завершения сканирования 6 граней
+      function recalibrateAllFacesByCenters() {
+        const faces = ["U", "F", "R", "B", "L", "D"];
+        if (!faces.every((f) => Array.isArray(state.rawCapturedRgb[f]) && state.rawCapturedRgb[f].length === 9)) {
+          return false;
+        }
+
+        // Собираем 6 центральных RGB (индекс 4)
+        const centers = faces.map((f) => {
+          const rgb = state.rawCapturedRgb[f][4];
+          const hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
+          return { face: f, rgb, hsv };
+        });
+
+        // Белый центр — тот, у которого минимальная насыщенность S
+        let whiteCenter = centers[0];
+        for (const c of centers) {
+          if (c.hsv.s < whiteCenter.hsv.s) whiteCenter = c;
+        }
+        whiteCenter.assignedColor = "W";
+
+        // Оставшиеся 5 центров сортируем по Hue и сопоставляем с R -> O -> Y -> G -> B
+        const chromatic = centers.filter((c) => c !== whiteCenter);
+        // Сдвигаем Hue красного (340..360 -> -20..0), чтобы порядок по кругу был R, O, Y, G, B
+        const normHue = (h) => (h >= 330 ? h - 360 : h);
+        chromatic.sort((a, b) => normHue(a.hsv.h) - normHue(b.hsv.h));
+
+        const hueOrder = ["R", "O", "Y", "G", "B"];
+        chromatic.forEach((c, idx) => {
+          c.assignedColor = hueOrder[idx];
+        });
+
+        // Теперь каждую из 54 клеток привязываем к ближайшему из 6 откалиброванных центров
+        const hueDist = (h1, h2) => {
+          const d = Math.abs(h1 - h2);
+          return Math.min(d, 360 - d);
+        };
+
+        for (const f of faces) {
+          const rawFace = state.rawCapturedRgb[f];
+          const mapped = rawFace.map((rgb, idx) => {
+            if (idx === 4) {
+              const own = centers.find((c) => c.face === f);
+              return own ? own.assignedColor : classifyRgbHsv(rgb[0], rgb[1], rgb[2]);
+            }
+            const hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
+            // Если насыщенность близка к белому центру и намного ниже цветных
+            if (hsv.s <= whiteCenter.hsv.s + 0.14 && hsv.s < 0.34) {
+              return "W";
+            }
+            let bestCol = "W";
+            let minScore = Infinity;
+            for (const c of chromatic) {
+              const hd = hueDist(hsv.h, c.hsv.h) / 180;
+              const sd = Math.abs(hsv.s - c.hsv.s) * 0.35;
+              const vd = Math.abs(hsv.v - c.hsv.v) * 0.25;
+              const score = hd + sd + vd;
+              if (score < minScore) {
+                minScore = score;
+                bestCol = c.assignedColor;
+              }
+            }
+            return bestCol;
+          });
+          state.cubeNet[f] = mapped;
+        }
+
+        logMsg("Выполнена автокалибровка всех 54 наклеек по 6 центрам кубика");
+        return true;
       }
 
       function updatePlayPauseUI() {
@@ -704,7 +824,6 @@
         }
       }
 
-      // --- АВТОКАЛИБРОВКА КЛЕШНИ ПО СОПРОТИВЛЕНИЮ МОТОРА ---
       async function setMotorPower(portId, power) {
         const clamped = Math.max(-100, Math.min(100, Math.round(power)));
         const pByte = clamped < 0 ? 256 + clamped : clamped;
@@ -786,7 +905,6 @@
         }
       };
 
-      // --- ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ КНОПОК ---
       window.openSettingsModal = function () {
         const modal = $("settingsModal");
         if (modal) {
@@ -841,7 +959,7 @@
           setBtStatus("connecting");
           setTimeout(() => {
             setBtStatus("disconnected");
-            alert("Web Bluetooth недоступен в этом окне/браузере. Откройте сайт на GitHub Pages в Chrome/Edge по HTTPS или включите «Демо: ВКЛ» по центру верхней панели.");
+            alert("Web Bluetooth недоступен в этом окне/браузере. Откройте сайт по HTTPS в Chrome/Edge или включите «Демо: ВКЛ».");
           }, 400);
           logMsg("Ошибка: navigator.bluetooth недоступен");
           return;
@@ -913,11 +1031,10 @@
 
         const cmd = [0x0e, 0x00, 0x81, portId, 0x11, 0x0b, d0, d1, d2, d3, speedByte, 0x64, 0x7f, 0x00];
         await sendLwpPacket(cmd);
-        const estMs = Math.min(2500, Math.max(220, Math.round((absDeg / Math.max(20, Math.abs(speed))) * 220)));
+        const estMs = Math.min(2500, Math.max(260, Math.round((absDeg / Math.max(20, Math.abs(speed))) * 240)));
         await sleep(estMs);
       }
 
-      // Красная кнопка STOP (слева вверху) — останавливает все действия на хабе
       window.emergencyStopAll = async function () {
         state.emergencyStop = true;
         state.autoSolving = false;
@@ -935,13 +1052,12 @@
         if (stage) stage.textContent = "Остановлено кнопкой STOP";
       };
 
-      // --- УПРАВЛЕНИЕ МЕХАНИКОЙ (ПОРТЫ A, B, C) ---
       window.pushTrolleyA = () => rotateMotorDegrees(PORTS.A, state.config.degA, state.config.spdA, state.config.invA);
       window.retractTrolleyA = () => rotateMotorDegrees(PORTS.A, -state.config.degA, state.config.spdA, state.config.invA);
       window.flipCubeCycle = async () => {
         state.emergencyStop = false;
         await window.pushTrolleyA();
-        await sleep(120);
+        await sleep(140);
         await window.retractTrolleyA();
       };
 
@@ -1023,25 +1139,11 @@
         } catch (e) {}
       };
 
-      function classifyRgb(r, g, b) {
-        let best = "W";
-        let minDist = Infinity;
-        for (const key of COLOR_CYCLE) {
-          const [cr, cg, cb] = COLORS[key].rgb;
-          const dist = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2;
-          if (dist < minDist) {
-            minDist = dist;
-            best = key;
-          }
-        }
-        return best;
-      }
-
       function sampleVideoGrid() {
         const video = $("cameraVideo");
         const canvas = $("captureCanvas");
         if (!video || !canvas || video.readyState < 2) {
-          return state.liveColors.slice();
+          return { colors: state.liveColors.slice(), rawRgb: state.liveRawRgb.slice() };
         }
         const size = 180;
         canvas.width = size;
@@ -1050,23 +1152,29 @@
         ctx.drawImage(video, 0, 0, size, size);
 
         const detected = [];
+        const rawList = [];
         for (let row = 0; row < 3; row++) {
           for (let col = 0; col < 3; col++) {
             const cx = Math.round(((col + 0.5) / 3) * size);
             const cy = Math.round(((row + 0.5) / 3) * size);
-            const data = ctx.getImageData(cx - 4, cy - 4, 8, 8).data;
+            const data = ctx.getImageData(cx - 5, cy - 5, 10, 10).data;
             let r = 0, g = 0, b = 0, n = 0;
             for (let i = 0; i < data.length; i += 4) {
               r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
             }
-            const code = classifyRgb(r / n, g / n, b / n);
+            const avgR = r / n;
+            const avgG = g / n;
+            const avgB = b / n;
+            const code = classifyRgbHsv(avgR, avgG, avgB);
             detected.push(code);
+            rawList.push([avgR, avgG, avgB]);
             const dot = $("liveDot" + (row * 3 + col));
             if (dot) dot.style.backgroundColor = COLORS[code].hex;
           }
         }
         state.liveColors = detected.slice();
-        return detected.slice();
+        state.liveRawRgb = rawList.slice();
+        return { colors: detected.slice(), rawRgb: rawList.slice() };
       }
 
       function startLivePreviewLoop() {
@@ -1074,13 +1182,17 @@
         state.liveTimer = setInterval(sampleVideoGrid, 220);
       }
 
-      function commitFaceColors(faceKey, colorsArr) {
+      function commitFaceColors(faceKey, colorsArr, rawRgbArr) {
         if (!state.cubeNet[faceKey]) return;
         const safeCopy = Array.from({ length: 9 }, (_, i) => {
           const val = colorsArr && colorsArr[i];
           return COLORS[val] ? val : "X";
         });
         state.cubeNet[faceKey] = safeCopy;
+        state.scannedFaces[faceKey] = true;
+        if (Array.isArray(rawRgbArr) && rawRgbArr.length === 9) {
+          state.rawCapturedRgb[faceKey] = rawRgbArr.map((c) => (c ? c.slice() : [128, 128, 128]));
+        }
       }
 
       // --- МОДЕЛЬ КУБИКА, РЕШАТЕЛЬ И ГЕНЕРАЦИЯ ШАГОВ ПОД ВЕРХНЮЮ КАМЕРУ ---
@@ -1110,13 +1222,13 @@
           [c.L[6], c.L[7], c.L[8]] = [net.B[6], net.B[7], net.B[8]];
         } else if (move === "F") {
           c.F = rotFaceCW(net.F);
-          [c.U[6], c.U[7], c.U[8]] = [net.L[8], c.L[5], c.L[2]];
+          [c.U[6], c.U[7], c.U[8]] = [net.L[8], net.L[5], net.L[2]];
           [c.R[0], c.R[3], c.R[6]] = [net.U[6], net.U[7], net.U[8]];
           [c.D[2], c.D[1], c.D[0]] = [net.R[0], net.R[3], net.R[6]];
           [c.L[8], c.L[5], c.L[2]] = [net.D[0], net.D[1], net.D[2]];
         } else if (move === "B") {
           c.B = rotFaceCW(net.B);
-          [c.U[0], c.U[1], c.U[2]] = [net.R[2], c.R[5], c.R[8]];
+          [c.U[0], c.U[1], c.U[2]] = [net.R[2], net.R[5], net.R[8]];
           [c.L[0], c.L[3], c.L[6]] = [net.U[2], net.U[1], net.U[0]];
           [c.D[6], c.D[7], c.D[8]] = [net.L[0], net.L[3], net.L[6]];
           [c.R[2], c.R[5], c.R[8]] = [net.D[8], net.D[7], net.D[6]];
@@ -1339,7 +1451,6 @@
         return simplifyMoves(fullPath);
       }
 
-      // Тыловая сторона (B) уходит вниз (D), фронтальная (F) поднимается вверх (U)
       function simPushFlip(o) {
         return { U: o.F, B: o.U, D: o.B, F: o.D, R: o.R, L: o.L };
       }
@@ -1463,26 +1574,27 @@
         logMsg(`Рассчитан план сборки: ${state.plannedSteps.length} шагов`);
       }
 
-      // Пошаговое сканирование 6 граней начиная с верхней U:
-      // записывает текущую грань -> подсвечивает следующую -> переворачивает кубик моторами на следующую сторону
+      // Пошаговое сканирование 6 граней начиная с верхней U
       window.playScanStep = async function () {
         if (state.scanningStepBusy || state.autoSolving || state.steppingSingle) return;
+
+        // Защита от случайного сброса уже отсканированного куба
+        if (state.scanCompleted) {
+          setScanStatusText("Все 6 сторон уже зафиксированы. Нажмите «Очистить всё», если нужно пересканировать заново.", "done");
+          return;
+        }
+
         state.emergencyStop = false;
         state.scanningStepBusy = true;
 
         try {
-          if (state.scanCompleted) {
-            state.scanIndex = 0;
-            state.scanCompleted = false;
-          }
-
           const currentFace = SCAN_ORDER[state.scanIndex];
           state.activeFace = currentFace;
           renderAllCubeViews();
 
-          await sleep(120);
-          const sampled = sampleVideoGrid();
-          commitFaceColors(currentFace, sampled);
+          await sleep(160);
+          const { colors, rawRgb } = sampleVideoGrid();
+          commitFaceColors(currentFace, colors, rawRgb);
           logMsg(`Сканирование [${state.scanIndex + 1}/6]: записана грань ${currentFace} (${state.cubeNet[currentFace].join("")})`);
           renderAllCubeViews();
 
@@ -1492,28 +1604,36 @@
             state.scanIndex = nextIndex;
             state.activeFace = nextFace;
             renderAllCubeViews();
-            setScanStatusText(`Записана грань [${currentFace}]. Подсвечена [${nextFace}] — переворот кубика...`, "info");
+            setScanStatusText(`Записана грань [${currentFace}] (${nextIndex}/6). Переворот на [${nextFace}]...`, "info");
 
             if (nextFace !== "F") {
               await window.rotatePlatformC(-1);
               if (state.emergencyStop) return;
-              await sleep(120);
+              await sleep(150);
             }
             await window.flipCubeCycle();
             if (state.emergencyStop) return;
-            await sleep(250);
+            await sleep(450);
             sampleVideoGrid();
 
-            setScanStatusText(`Грань [${nextFace}] подсвечена и подведена под камеру. Нажмите «Плэй / Шаг» для записи.`, "info");
+            setScanStatusText(`Грань [${nextFace}] (${nextIndex + 1}/6) под камерой. Нажмите «Плэй / Шаг» для записи.`, "info");
           } else {
             state.scanCompleted = true;
-            setScanStatusText("Все 6 сторон записаны. Поворот площадки на 45° туда-обратно...", "info");
+            setScanStatusText("Все 6 сторон записаны. Калибровка цветов по 6 центрам и проверка...", "info");
+
+            // Автокалибровка цветов по 6 центрам без затирания массивов случайными значениями
+            recalibrateAllFacesByCenters();
+            renderAllCubeViews();
+
             await wigglePlatform45C();
             if (state.emergencyStop) return;
 
             updatePlannedStepsFromCube();
-            const msg = "Все стороны отсканированы! Можно переходить к разделу «4. Сборка и монитор шагов».";
-            setScanStatusText(msg, "done");
+            const valid = isCubeValid(state.cubeNet);
+            const msg = valid
+              ? "Все стороны отсканированы и откалиброваны (54/54)! Переходите к разделу «4. Сборка и монитор шагов»."
+              : "Все 6 сторон записаны. Проверьте счетчик цветов (должно быть по 9 каждого) и при необходимости поправьте клетки кликом.";
+            setScanStatusText(msg, valid ? "done" : "warn");
             logMsg(msg);
           }
         } finally {
@@ -1521,11 +1641,10 @@
         }
       };
 
-      // Записывает текущую грань без переключения подсветки на следующую сторону
       window.captureCurrentFace = function () {
         const targetFace = state.activeFace;
-        const sampled = sampleVideoGrid();
-        commitFaceColors(targetFace, sampled);
+        const { colors, rawRgb } = sampleVideoGrid();
+        commitFaceColors(targetFace, colors, rawRgb);
         logMsg(`Грань ${targetFace} считана: ${state.cubeNet[targetFace].join("")}`);
 
         renderAllCubeViews();
@@ -1543,8 +1662,10 @@
         };
         demo = applyAlg(demo, "R U R' U' F2 D' L");
         state.cubeNet = cloneNet(demo);
+        state.rawCapturedRgb = createFreshRawNet();
+        state.scannedFaces = { U: true, L: true, F: true, R: true, B: true, D: true };
         state.scanIndex = 0;
-        state.scanCompleted = false;
+        state.scanCompleted = true;
         renderAllCubeViews();
         updatePlannedStepsFromCube();
         logMsg("Заполнена тестовая развертка и рассчитаны шаги сборки");
@@ -1552,6 +1673,8 @@
 
       window.clearCubeNet = function () {
         state.cubeNet = createFreshNet();
+        state.rawCapturedRgb = createFreshRawNet();
+        state.scannedFaces = { U: false, L: false, F: false, R: false, B: false, D: false };
         state.activeFace = "U";
         state.scanIndex = 0;
         state.scanCompleted = false;
@@ -1568,6 +1691,7 @@
           const f = box.dataset.face;
           const faceColors = state.cubeNet[f] || Array(9).fill("X");
           box.classList.toggle("active-face", f === state.activeFace);
+          box.classList.toggle("scanned-face", !!state.scannedFaces[f] && f !== state.activeFace);
           box.innerHTML = "";
           faceColors.forEach((c) => {
             const s = document.createElement("div");
@@ -1616,7 +1740,7 @@
         const countersEl = $("colorCounters");
         if (countersEl) {
           countersEl.innerHTML = COLOR_CYCLE.map(
-            (k) => `<span style="color:${COLORS[k].hex}">${k}:${counts[k]}</span>`
+            (k) => `<span style="color:${COLORS[k].hex}" class="${counts[k] === 9 ? 'font-bold underline' : ''}">${k}:${counts[k]}</span>`
           ).join("");
         }
         const valBadge = $("validationBadge");
@@ -1640,7 +1764,6 @@
         }
       }
 
-      // Выполнение одного ближайшего невыполненного шага с сохранением прогресса
       window.runSingleStepSolve = async function () {
         if (state.autoSolving || state.steppingSingle || state.scanningStepBusy) return;
         state.emergencyStop = false;
