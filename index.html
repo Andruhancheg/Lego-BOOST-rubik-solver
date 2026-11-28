@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LEGO Boost Rubik's Cube Solver v0.19</title>
+  <title>LEGO Boost Rubik's Cube Solver v0.20</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -108,8 +108,8 @@
   <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
   <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-3 pt-1.5 pb-2.5">
     <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1.5 px-1">
-      <span id="appVersion" class="text-sky-400 font-bold">v0.19</span>
-      <span id="jsStatus" class="text-emerald-400">SYSTEM: READY (LWP FIX + IMMUTABLE FACES)</span>
+      <span id="appVersion" class="text-sky-400 font-bold">v0.20</span>
+      <span id="jsStatus" class="text-emerald-400">SYSTEM: READY (STRICT SINGLE-FACE CAPTURE)</span>
     </div>
 
     <div class="flex items-center justify-between gap-2">
@@ -223,9 +223,9 @@
         <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">2. Развертка граней (54)</h2>
         <div class="flex items-center gap-2">
           <button id="btnScanPlayStep" type="button" onclick="window.playScanStep()"
-            class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-extrabold text-xs shadow flex items-center gap-1 cursor-pointer">
+            class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-45 disabled:pointer-events-none text-white font-extrabold text-xs shadow flex items-center gap-1 cursor-pointer">
             <span class="no-ptr">⏭</span>
-            <span class="no-ptr">Плэй / Шаг</span>
+            <span id="btnScanPlayStepLabel" class="no-ptr">Плэй / Шаг</span>
           </button>
           <button id="btnClearNet" type="button" onclick="window.clearCubeNet()"
             class="text-xs text-rose-400 hover:text-rose-300 underline cursor-pointer">
@@ -236,7 +236,7 @@
 
       <!-- Статус пошагового сканирования всех 6 сторон -->
       <div id="scanSequenceStatus" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-sky-300 font-medium">
-        Готово к сканированию с верхней грани [U]. Нажмите «Плэй / Шаг» для записи и переворота на следующую сторону.
+        Шаг 1/6: Грань [U] под камерой. Нажмите «Плэй / Шаг» для записи [U] и переворота на [F].
       </div>
 
       <!-- Схема развертки 4x3 -->
@@ -606,16 +606,15 @@
       };
 
       try {
-        const saved = localStorage.getItem("lego_rubik_cfg_v019");
+        const saved = localStorage.getItem("lego_rubik_cfg_v020");
         if (saved) Object.assign(state.config, JSON.parse(saved));
       } catch (e) {}
 
-      // Стартовый ход клешни при запуске приложения всегда 85°
       state.config.degB = 85;
 
       function saveConfig() {
         try {
-          localStorage.setItem("lego_rubik_cfg_v019", JSON.stringify(state.config));
+          localStorage.setItem("lego_rubik_cfg_v020", JSON.stringify(state.config));
         } catch (e) {}
       }
 
@@ -643,6 +642,13 @@
         if (tone === "done") el.classList.add("text-emerald-400");
         else if (tone === "warn") el.classList.add("text-amber-400");
         else el.classList.add("text-sky-300");
+      }
+
+      function setScanBtnLocked(locked) {
+        const btn = $("btnScanPlayStep");
+        const lbl = $("btnScanPlayStepLabel");
+        if (btn) btn.disabled = !!locked;
+        if (lbl) lbl.textContent = locked ? "Ход моторов..." : "Плэй / Шаг";
       }
 
       // --- КОНВЕРТАЦИЯ RGB -> HSV И УСТОЙЧИВАЯ КЛАССИФИКАЦИЯ ---
@@ -790,7 +796,6 @@
         const dv = event.target.value;
         if (!dv || dv.byteLength < 4) return;
         const msgType = dv.getUint8(2);
-        // 0x45 = Port Value (Single)
         if (msgType === 0x45 && dv.getUint8(3) === PORTS.B && dv.byteLength >= 8) {
           state.clawAngleB = dv.getInt32(4, true);
           state.clawAngleUpdatedTs = performance.now();
@@ -826,7 +831,6 @@
       async function setMotorPower(portId, power) {
         const clamped = Math.max(-100, Math.min(100, Math.round(power)));
         const pByte = clamped < 0 ? 256 + clamped : clamped;
-        // 0x08 байт: [0x08, 0x00, 0x81, portId, 0x11, 0x51, 0x00, pByte]
         await sendLwpPacket([0x08, 0x00, 0x81, portId, 0x11, 0x51, 0x00, pByte]);
       }
 
@@ -838,14 +842,12 @@
         const beforeTs = state.clawAngleUpdatedTs;
         await setMotorPower(PORTS.B, power);
 
-        // Даем мотору минимум 550 мс на старт и преодоление люфта до проверки упора
         await sleep(550);
         if (state.emergencyStop) {
           await setMotorPower(PORTS.B, 0);
           return state.clawAngleB;
         }
 
-        // Если хаб не присылает энкодер (beforeTs не обновился), крутим фиксированное время до упора
         if (state.clawAngleUpdatedTs === beforeTs) {
           await sleep(950);
           await setMotorPower(PORTS.B, 0);
@@ -884,7 +886,6 @@
 
         try {
           if (!state.demoMode && state.characteristic) {
-            // Корректный 10-байтовый пакет Port Input Format Setup (Single) для Mode 2 (POS) порта B
             await sendLwpPacket([0x0a, 0x00, 0x41, PORTS.B, 0x02, 0x01, 0x00, 0x00, 0x00, 0x01]);
             await sleep(200);
           }
@@ -892,18 +893,15 @@
           const dirSign = state.config.invB ? -1 : 1;
           const calPower = 38;
 
-          // 1. Открываем до упора
           const openPos = await driveClawUntilStall(-dirSign * calPower, 2200);
           if (state.emergencyStop) return;
           await sleep(250);
 
-          // 2. Закрываем до упора
           if (clawCalibInfo) clawCalibInfo.textContent = "2/3 Закрытие в упор...";
           const closedPos = await driveClawUntilStall(dirSign * calPower, 2200);
           if (state.emergencyStop) return;
           await sleep(250);
 
-          // 3. Открываем из закрытого положения на 85°
           const targetOpenDeg = 85;
           state.clawCalib = { openPos, closedPos, calibrated: true };
           state.config.degB = targetOpenDeg;
@@ -1022,7 +1020,6 @@
         }
       };
 
-      // Последовательная очередь записи пакетов BLE, чтобы пакеты не терялись при быстрой отправке
       function sendLwpPacket(bytes) {
         const packet = new Uint8Array(bytes);
         logMsg("TX -> " + toHex(packet));
@@ -1069,6 +1066,7 @@
         state.steppingSingle = false;
         state.scanningStepBusy = false;
         state.isPaused = false;
+        setScanBtnLocked(false);
         updatePlayPauseUI();
         logMsg("!!! STOP: ОСТАНОВКА ВСЕХ ДЕЙСТВИЙ НА ХАБЕ !!!");
 
@@ -1167,14 +1165,12 @@
         } catch (e) {}
       };
 
-      function sampleVideoGrid() {
+      // Читает актуальный кадр с видеопотока; если видео не запущено — возвращает null (никогда не подставляет старый буфер)
+      function captureFreshFrameGrid() {
         const video = $("cameraVideo");
         const canvas = $("captureCanvas");
-        if (!video || !canvas || video.readyState < 2) {
-          return {
-            colors: state.liveColors.slice(),
-            rawRgb: state.liveRawRgb.map((c) => (c ? c.slice() : [128, 128, 128]))
-          };
+        if (!video || !canvas || !state.mediaStream || video.readyState < 2 || video.videoWidth === 0) {
+          return null;
         }
         const size = 180;
         canvas.width = size;
@@ -1215,14 +1211,13 @@
         if (state.liveTimer) clearInterval(state.liveTimer);
         state.liveTimer = setInterval(() => {
           if (!state.scanningStepBusy) {
-            sampleVideoGrid();
+            captureFreshFrameGrid();
           }
         }, 250);
       }
 
       function commitFaceColors(faceKey, colorsArr, rawRgbArr, allowOverwrite = false) {
         if (!state.cubeNet[faceKey]) return false;
-        // Жесткая защита: уже зафиксированная грань не перезаписывается сама по себе
         if (state.scannedFaces[faceKey] && !allowOverwrite) {
           return false;
         }
@@ -1617,10 +1612,11 @@
         logMsg(`Рассчитан план сборки: ${state.plannedSteps.length} шагов`);
       }
 
-      // Пошаговое сканирование 6 граней начиная с верхней U
+      // Пошаговое сканирование 6 граней начиная с верхней U:
+      // 1 клик = считывает ровно 1 текущую грань под камерой и подводит следующую
       window.playScanStep = async function () {
         const now = performance.now();
-        if (now - state.lastScanClickTs < 700) return;
+        if (now - state.lastScanClickTs < 1200) return;
         state.lastScanClickTs = now;
 
         if (state.scanningStepBusy || state.autoSolving || state.steppingSingle) return;
@@ -1632,27 +1628,32 @@
 
         state.emergencyStop = false;
         state.scanningStepBusy = true;
+        setScanBtnLocked(true);
 
         try {
-          // Определяем первую еще не отсканированную грань по порядку SCAN_ORDER
-          let targetIdx = state.scanIndex;
-          if (state.scannedFaces[SCAN_ORDER[targetIdx]]) {
-            const firstUnscanned = SCAN_ORDER.findIndex((f) => !state.scannedFaces[f]);
-            if (firstUnscanned === -1) {
-              state.scanCompleted = true;
-              return;
-            }
-            targetIdx = firstUnscanned;
-            state.scanIndex = targetIdx;
+          const targetIdx = SCAN_ORDER.findIndex((f) => !state.scannedFaces[f]);
+          if (targetIdx === -1) {
+            state.scanCompleted = true;
+            return;
           }
 
+          state.scanIndex = targetIdx;
           const currentFace = SCAN_ORDER[targetIdx];
           state.activeFace = currentFace;
+          renderAllCubeViews();
 
-          // Снимаем и жестко блокируем текущую грань ДО движения моторов
-          const snap = sampleVideoGrid();
-          commitFaceColors(currentFace, snap.colors.slice(), snap.rawRgb.map((c) => c.slice()), false);
-          logMsg(`Сканирование [${targetIdx + 1}/6]: зафиксирована грань ${currentFace} (${state.cubeNet[currentFace].join("")})`);
+          // Пауза стабилизации кадра перед захватом
+          await sleep(250);
+          const snap = captureFreshFrameGrid();
+          if (!snap) {
+            setScanStatusText("Ошибка: камера не активна. Включите камеру перед сканированием.", "warn");
+            logMsg("Сканирование прервано: видеопоток камеры не готов");
+            return;
+          }
+
+          commitFaceColors(currentFace, snap.colors, snap.rawRgb, false);
+          const recordedStr = state.cubeNet[currentFace].join("");
+          logMsg(`Сканирование [${targetIdx + 1}/6]: записана грань ${currentFace} = ${recordedStr}`);
           renderAllCubeViews();
 
           if (targetIdx < SCAN_ORDER.length - 1) {
@@ -1661,7 +1662,7 @@
             state.scanIndex = nextIndex;
             state.activeFace = nextFace;
             renderAllCubeViews();
-            setScanStatusText(`Записана грань [${currentFace}] (${nextIndex}/6). Переворот на [${nextFace}]...`, "info");
+            setScanStatusText(`Записана [${currentFace}] (${recordedStr}). Переворот кубика на [${nextFace}]...`, "info");
 
             if (nextFace !== "F") {
               await window.rotatePlatformC(-1);
@@ -1670,10 +1671,14 @@
             }
             await window.flipCubeCycle();
             if (state.emergencyStop) return;
-            await sleep(450);
+            await sleep(500);
 
-            sampleVideoGrid();
-            setScanStatusText(`Грань [${nextFace}] (${nextIndex + 1}/6) под камерой. Нажмите «Плэй / Шаг» для записи.`, "info");
+            // Обновляем только точки прицела поверх видео, состояние развертки не трогаем
+            captureFreshFrameGrid();
+            setScanStatusText(
+              `Шаг ${nextIndex + 1}/6: Грань [${nextFace}] под камерой. Нажмите «Плэй / Шаг» для записи [${nextFace}].`,
+              "info"
+            );
           } else {
             state.scanCompleted = true;
             setScanStatusText("Все 6 сторон записаны. Калибровка цветов по 6 центрам...", "info");
@@ -1694,15 +1699,19 @@
           }
         } finally {
           state.scanningStepBusy = false;
+          setScanBtnLocked(false);
         }
       };
 
       window.captureCurrentFace = function () {
         if (state.scanningStepBusy) return;
         const targetFace = state.activeFace;
-        const snap = sampleVideoGrid();
-        // Ручное нажатие «Считать в грань» явно разрешает перезапись выбранной грани
-        commitFaceColors(targetFace, snap.colors.slice(), snap.rawRgb.map((c) => c.slice()), true);
+        const snap = captureFreshFrameGrid();
+        if (!snap) {
+          logMsg("Камера не активна — невозможно считать грань");
+          return;
+        }
+        commitFaceColors(targetFace, snap.colors, snap.rawRgb, true);
         logMsg(`Грань ${targetFace} считана вручную: ${state.cubeNet[targetFace].join("")}`);
 
         renderAllCubeViews();
@@ -1737,7 +1746,7 @@
         state.scanIndex = 0;
         state.scanCompleted = false;
         state.plannedSteps = [];
-        setScanStatusText("Готово к сканированию с верхней грани [U]. Нажмите «Плэй / Шаг» для записи и переворота на следующую сторону.", "info");
+        setScanStatusText("Шаг 1/6: Грань [U] под камерой. Нажмите «Плэй / Шаг» для записи [U] и переворота на [F].", "info");
         renderAllCubeViews();
         renderStepsMonitor();
         const movesBox = $("solveMovesDisplay");
