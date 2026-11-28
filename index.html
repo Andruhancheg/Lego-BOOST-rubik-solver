@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LEGO Boost Rubik's Cube Solver v0.10</title>
+  <title>LEGO Boost Rubik's Cube Solver v0.12</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -106,7 +106,7 @@
   <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-3 pt-1.5 pb-2.5">
     <!-- Строка версии выше кнопки STOP -->
     <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1.5 px-1">
-      <span id="appVersion" class="text-sky-400 font-bold">v0.10</span>
+      <span id="appVersion" class="text-sky-400 font-bold">v0.12</span>
       <span id="jsStatus" class="text-emerald-400">SYSTEM: READY</span>
     </div>
 
@@ -157,13 +157,22 @@
   <!-- ОСНОВНОЙ КОНТЕНТ -->
   <main class="flex-1 max-w-lg w-full mx-auto px-3 pt-3 space-y-4">
 
-    <!-- БЛОК 1: АВТОСБОРКА -->
+    <!-- БЛОК 1: АВТОСБОРКА И КНОПКА ПЛЕЙ / ПАУЗА -->
     <section class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg">
-      <button id="btnAutoSolve" type="button" onclick="window.runAutoSolvePipeline()"
-        class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] text-white font-extrabold text-base tracking-wide shadow-lg shadow-emerald-950/60 flex items-center justify-center gap-2 cursor-pointer">
-        <span class="no-ptr text-lg">▶</span>
-        <span class="no-ptr">АВТОСБОРКА КУБИКА</span>
-      </button>
+      <div class="flex gap-2">
+        <button id="btnAutoSolve" type="button" onclick="window.runAutoSolvePipeline()"
+          class="flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] text-white font-extrabold text-sm sm:text-base tracking-wide shadow-lg shadow-emerald-950/60 flex items-center justify-center gap-2 cursor-pointer">
+          <span class="no-ptr text-lg">▶</span>
+          <span class="no-ptr">АВТОСБОРКА КУБИКА</span>
+        </button>
+
+        <!-- Кнопка Плей / Пауза -->
+        <button id="btnPlayPause" type="button" onclick="window.togglePlayPauseSolve()"
+          class="px-4 py-3.5 rounded-xl bg-sky-600 hover:bg-sky-500 active:scale-95 text-white font-extrabold text-xs sm:text-sm tracking-wide shadow-lg flex items-center justify-center gap-1.5 shrink-0 cursor-pointer">
+          <span id="playPauseIcon" class="no-ptr text-base">⏯</span>
+          <span id="playPauseText" class="no-ptr">ПЛЕЙ / ПАУЗА</span>
+        </button>
+      </div>
 
       <!-- Статус конвейера автосборки -->
       <div class="mt-2.5 bg-slate-950 rounded-xl p-2.5 border border-slate-800/80">
@@ -178,10 +187,13 @@
       </div>
     </section>
 
-    <!-- БЛОК 2: КАМЕРА И СКАНЕР ГРАНИ -->
+    <!-- БЛОК 2: КАМЕРА И СКАНЕР ГРАНИ (ВИД СВЕРХУ) -->
     <section class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg space-y-3">
       <div class="flex items-center justify-between">
-        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">1. Камера сканирования</h2>
+        <div>
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">1. Камера сканирования</h2>
+          <p class="text-[10px] text-sky-400">Камера сверху (смотрит на верхнюю грань U)</p>
+        </div>
         <div class="flex items-center gap-2">
           <label class="flex items-center gap-1 text-[11px] text-slate-400 cursor-pointer">
             <input id="chkAutoFlash" type="checkbox" checked class="accent-sky-500 rounded" />
@@ -226,11 +238,11 @@
       <div class="grid grid-cols-2 gap-2">
         <button id="btnScanFace" type="button" onclick="window.captureCurrentFace()"
           class="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow cursor-pointer">
-          Считать в грань [<span id="activeFaceBadge">F</span>]
+          Считать в грань [<span id="activeFaceBadge">U</span>]
         </button>
         <button id="btnFillDemoCube" type="button" onclick="window.fillDemoCube()"
           class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs border border-slate-700 cursor-pointer">
-          Тест-заполнение
+          Тест-скрамбл
         </button>
       </div>
     </section>
@@ -248,17 +260,17 @@
       <!-- Схема развертки 4x3 -->
       <div class="cube-net" id="cubeNetContainer">
         <div></div>
-        <div class="face-box" data-face="U" title="Верх (U)"></div>
+        <div class="face-box active-face" data-face="U" title="Верх (U) — под камерой"></div>
         <div></div>
         <div></div>
 
         <div class="face-box" data-face="L" title="Лево (L)"></div>
-        <div class="face-box active-face" data-face="F" title="Фронт (F)"></div>
+        <div class="face-box" data-face="F" title="Фронт (F)"></div>
         <div class="face-box" data-face="R" title="Право (R)"></div>
         <div class="face-box" data-face="B" title="Тыл (B)"></div>
 
         <div></div>
-        <div class="face-box" data-face="D" title="Низ (D)"></div>
+        <div class="face-box" data-face="D" title="Низ (D) — на платформе"></div>
         <div></div>
         <div></div>
       </div>
@@ -266,12 +278,50 @@
       <!-- Палитра для ручной правки выбранной грани + счетчик цветов -->
       <div class="bg-slate-950 rounded-xl p-2.5 border border-slate-800 space-y-2">
         <div class="flex items-center justify-between text-xs">
-          <span class="text-slate-400">Активная грань: <strong id="selectedFaceTitle" class="text-sky-400">F (Фронт)</strong></span>
+          <span class="text-slate-400">Активная грань: <strong id="selectedFaceTitle" class="text-sky-400">U (Верх / Камера)</strong></span>
           <span id="validationBadge" class="text-[11px] font-mono text-amber-400">Не заполнено</span>
         </div>
 
         <div id="activeFaceEditor" class="grid grid-cols-3 gap-1.5 max-w-[150px] mx-auto py-1"></div>
         <div id="colorCounters" class="flex justify-between text-[11px] font-mono pt-1 border-t border-slate-800"></div>
+      </div>
+    </section>
+
+    <!-- БЛОК 4: БЫСТРОЕ РУЧНОЕ УПРАВЛЕНИЕ МЕХАНИКОЙ НА ГЛАВНОЙ -->
+    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg space-y-2.5">
+      <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">3. Ручное управление приводами</h2>
+      <div class="grid grid-cols-2 gap-2 text-xs font-bold">
+        <button id="btnMainTurnLeft" type="button" onclick="window.rotatePlatformC(-1)"
+          class="py-3 px-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white shadow cursor-pointer">
+          ↺ Поворот влево -90°
+        </button>
+        <button id="btnMainTurnRight" type="button" onclick="window.rotatePlatformC(1)"
+          class="py-3 px-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white shadow cursor-pointer">
+          ↻ Поворот вправо +90°
+        </button>
+        <button id="btnMainClamp" type="button" onclick="window.clampClawB()"
+          class="py-3 px-2 rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white shadow cursor-pointer">
+          Зажать
+        </button>
+        <button id="btnMainRelease" type="button" onclick="window.releaseClawB()"
+          class="py-3 px-2 rounded-xl bg-slate-700 hover:bg-slate-600 active:scale-95 text-white shadow cursor-pointer">
+          Разжать
+        </button>
+        <button id="btnMainPushCycle" type="button" onclick="window.flipCubeCycle()"
+          class="col-span-2 py-3 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 active:scale-95 text-white shadow cursor-pointer">
+          Толкнуть → Вернуть
+        </button>
+      </div>
+    </section>
+
+    <!-- БЛОК 5: МОНИТОР ШАГОВ СБОРКИ КУБИКА -->
+    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg space-y-2.5">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">4. Монитор шагов сборки</h2>
+        <span id="stepsCountBadge" class="text-[11px] font-mono text-slate-400">0 шагов</span>
+      </div>
+      <div id="stepsMonitor" class="bg-slate-950 border border-slate-800 rounded-xl p-3 max-h-64 overflow-y-auto space-y-1.5 font-mono text-xs">
+        <div class="text-slate-500 text-[11px]">Отсканируйте все 6 граней кубика — здесь появится пошаговый план сборки.</div>
       </div>
     </section>
 
@@ -471,13 +521,14 @@
         X: { name: "Пусто", hex: "#1e293b", rgb: [30, 41, 59] }
       };
       const COLOR_CYCLE = ["W", "R", "B", "O", "G", "Y"];
+      const SCAN_ORDER = ["U", "F", "R", "B", "L", "D"];
       const FACE_NAMES = {
-        U: "U (Верх)",
+        U: "U (Верх / Камера)",
         L: "L (Лево)",
         F: "F (Фронт)",
         R: "R (Право)",
         B: "B (Тыл)",
-        D: "D (Низ)"
+        D: "D (Низ / Платформа)"
       };
 
       const state = {
@@ -487,13 +538,15 @@
         characteristic: null,
         emergencyStop: false,
         autoSolving: false,
+        isPaused: false,
         mediaStream: null,
         torchOn: false,
         liveTimer: null,
         liveColors: Array(9).fill("X"),
-        activeFace: "F",
+        activeFace: "U",
         clawAngleB: 0,
         clawCalib: { openPos: null, closedPos: null, calibrated: false },
+        plannedSteps: [],
         cubeNet: {
           U: Array(9).fill("X"),
           L: Array(9).fill("X"),
@@ -510,13 +563,13 @@
       };
 
       try {
-        const saved = localStorage.getItem("lego_rubik_cfg_v010");
+        const saved = localStorage.getItem("lego_rubik_cfg_v012");
         if (saved) Object.assign(state.config, JSON.parse(saved));
       } catch (e) {}
 
       function saveConfig() {
         try {
-          localStorage.setItem("lego_rubik_cfg_v010", JSON.stringify(state.config));
+          localStorage.setItem("lego_rubik_cfg_v012", JSON.stringify(state.config));
         } catch (e) {}
       }
 
@@ -536,11 +589,56 @@
         return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0").toUpperCase()).join(" ");
       }
 
+      function updatePlayPauseUI() {
+        const btn = $("btnPlayPause");
+        const icon = $("playPauseIcon");
+        const txt = $("playPauseText");
+        if (!btn || !icon || !txt) return;
+
+        btn.classList.remove("bg-sky-600", "hover:bg-sky-500", "bg-amber-600", "hover:bg-amber-500", "bg-emerald-600", "hover:bg-emerald-500");
+
+        if (state.autoSolving && !state.isPaused) {
+          btn.classList.add("bg-amber-600", "hover:bg-amber-500");
+          icon.textContent = "⏸";
+          txt.textContent = "ПАУЗА";
+        } else if (state.autoSolving && state.isPaused) {
+          btn.classList.add("bg-emerald-600", "hover:bg-emerald-500");
+          icon.textContent = "▶";
+          txt.textContent = "ПРОДОЛЖИТЬ";
+        } else {
+          btn.classList.add("bg-sky-600", "hover:bg-sky-500");
+          icon.textContent = "⏯";
+          txt.textContent = "ПЛЕЙ / ПАУЗА";
+        }
+      }
+
+      window.togglePlayPauseSolve = function () {
+        if (!state.autoSolving) {
+          window.runAutoSolvePipeline();
+          return;
+        }
+        state.isPaused = !state.isPaused;
+        updatePlayPauseUI();
+        const stage = $("autoStageText");
+        if (state.isPaused) {
+          if (stage) stage.textContent = "Пауза (выполненные шаги сохранены)";
+          logMsg("Сборка поставлена на ПАУЗУ");
+        } else {
+          if (stage) stage.textContent = "Возобновление сборки...";
+          logMsg("Сборка ВОЗОБНОВЛЕНА");
+        }
+      };
+
+      async function waitWhilePaused() {
+        while (state.isPaused && !state.emergencyStop) {
+          await sleep(120);
+        }
+      }
+
       function handleLwpNotification(event) {
         const dv = event.target.value;
         if (!dv || dv.byteLength < 4) return;
         const msgType = dv.getUint8(2);
-        // 0x45: Port Value (Single) — позиция мотора B (0x01) в режиме 0x02 (POS)
         if (msgType === 0x45 && dv.getUint8(3) === PORTS.B && dv.byteLength >= 8) {
           state.clawAngleB = dv.getInt32(4, true);
         }
@@ -784,12 +882,17 @@
         await sleep(estMs);
       }
 
+      // Красная кнопка STOP (слева вверху) — останавливает все действия на хабе
       window.emergencyStopAll = async function () {
         state.emergencyStop = true;
         state.autoSolving = false;
-        logMsg("!!! АВАРИЙНЫЙ СТОП ВСЕХ МОТОРОВ !!!");
-        for (const p of [PORTS.A, PORTS.B, PORTS.C]) {
-          await sendLwpPacket([0x06, 0x00, 0x81, p, 0x11, 0x51, 0x00]);
+        state.isPaused = false;
+        updatePlayPauseUI();
+        logMsg("!!! STOP: ОСТАНОВКА ВСЕХ ДЕЙСТВИЙ НА ХАБЕ !!!");
+
+        const allPorts = [PORTS.A, PORTS.B, PORTS.C, PORTS.D, 0x39, 0x3a];
+        for (const p of allPorts) {
+          await sendLwpPacket([0x06, 0x00, 0x81, p, 0x00, 0x51, 0x00]);
         }
         const stage = $("autoStageText");
         if (stage) stage.textContent = "Остановлено кнопкой STOP";
@@ -923,15 +1026,400 @@
         state.liveTimer = setInterval(sampleVideoGrid, 220);
       }
 
+      // --- МОДЕЛЬ КУБИКА, РЕШАТЕЛЬ И ГЕНЕРАЦИЯ ШАГОВ ПОД ВЕРХНЮЮ КАМЕРУ ---
+      function cloneNet(net) {
+        const out = {};
+        for (const f of ["U", "R", "F", "D", "L", "B"]) out[f] = net[f].slice();
+        return out;
+      }
+
+      function rotFaceCW(arr) {
+        return [arr[6], arr[3], arr[0], arr[7], arr[4], arr[1], arr[8], arr[5], arr[2]];
+      }
+
+      function applyBasicMove(net, move) {
+        const c = cloneNet(net);
+        if (move === "U") {
+          c.U = rotFaceCW(net.U);
+          [c.F[0], c.F[1], c.F[2]] = [net.R[0], net.R[1], net.R[2]];
+          [c.L[0], c.L[1], c.L[2]] = [net.F[0], net.F[1], net.F[2]];
+          [c.B[0], c.B[1], c.B[2]] = [net.L[0], net.L[1], net.L[2]];
+          [c.R[0], c.R[1], c.R[2]] = [net.B[0], net.B[1], net.B[2]];
+        } else if (move === "D") {
+          c.D = rotFaceCW(net.D);
+          [c.F[6], c.F[7], c.F[8]] = [net.L[6], net.L[7], net.L[8]];
+          [c.R[6], c.R[7], c.R[8]] = [net.F[6], net.F[7], net.F[8]];
+          [c.B[6], c.B[7], c.B[8]] = [net.R[6], net.R[7], net.R[8]];
+          [c.L[6], c.L[7], c.L[8]] = [net.B[6], net.B[7], net.B[8]];
+        } else if (move === "F") {
+          c.F = rotFaceCW(net.F);
+          [c.U[6], c.U[7], c.U[8]] = [net.L[8], net.L[5], net.L[2]];
+          [c.R[0], c.R[3], c.R[6]] = [net.U[6], net.U[7], net.U[8]];
+          [c.D[2], c.D[1], c.D[0]] = [net.R[0], net.R[3], net.R[6]];
+          [c.L[8], c.L[5], c.L[2]] = [net.D[0], net.D[1], net.D[2]];
+        } else if (move === "B") {
+          c.B = rotFaceCW(net.B);
+          [c.U[0], c.U[1], c.U[2]] = [net.R[2], net.R[5], net.R[8]];
+          [c.L[0], c.L[3], c.L[6]] = [net.U[2], net.U[1], net.U[0]];
+          [c.D[6], c.D[7], c.D[8]] = [net.L[0], net.L[3], net.L[6]];
+          [c.R[2], c.R[5], c.R[8]] = [net.D[8], net.D[7], net.D[6]];
+        } else if (move === "R") {
+          c.R = rotFaceCW(net.R);
+          [c.U[2], c.U[5], c.U[8]] = [net.F[2], net.F[5], net.F[8]];
+          [c.B[6], c.B[3], c.B[0]] = [net.U[2], net.U[5], net.U[8]];
+          [c.D[2], c.D[5], c.D[8]] = [net.B[6], net.B[3], net.B[0]];
+          [c.F[2], c.F[5], c.F[8]] = [net.D[2], net.D[5], net.D[8]];
+        } else if (move === "L") {
+          c.L = rotFaceCW(net.L);
+          [c.U[0], c.U[3], c.U[6]] = [net.B[8], net.B[5], net.B[2]];
+          [c.F[0], c.F[3], c.F[6]] = [net.U[0], net.U[3], net.U[6]];
+          [c.D[0], c.D[3], c.D[6]] = [net.F[0], net.F[3], net.F[6]];
+          [c.B[8], c.B[5], c.B[2]] = [net.D[0], net.D[3], net.D[6]];
+        }
+        return c;
+      }
+
+      function applyMoveToken(net, token) {
+        const face = token[0];
+        const count = token.endsWith("2") ? 2 : token.endsWith("'") ? 3 : 1;
+        let cur = net;
+        for (let i = 0; i < count; i++) cur = applyBasicMove(cur, face);
+        return cur;
+      }
+
+      function applyAlg(net, algStr) {
+        const tokens = algStr.trim().split(/\s+/).filter(Boolean);
+        let cur = net;
+        for (const t of tokens) cur = applyMoveToken(cur, t);
+        return cur;
+      }
+
+      function isCubeValid(net) {
+        const counts = { W: 0, Y: 0, R: 0, O: 0, B: 0, G: 0 };
+        let total = 0;
+        for (const f of ["U", "R", "F", "D", "L", "B"]) {
+          for (const c of net[f]) {
+            if (counts[c] === undefined) return false;
+            counts[c]++;
+            total++;
+          }
+        }
+        const centers = new Set(["U", "R", "F", "D", "L", "B"].map(f => net[f][4]));
+        return total === 54 && COLOR_CYCLE.every(k => counts[k] === 9) && centers.size === 6;
+      }
+
+      function isSolved(net) {
+        return ["U", "R", "F", "D", "L", "B"].every(f => net[f].every(c => c === net[f][4]));
+      }
+
+      function simplifyMoves(moves) {
+        const stack = [];
+        for (const m of moves) {
+          if (!m) continue;
+          const face = m[0];
+          const p = m.endsWith("2") ? 2 : m.endsWith("'") ? 3 : 1;
+          if (stack.length && stack[stack.length - 1].face === face) {
+            const np = (stack[stack.length - 1].p + p) % 4;
+            if (np === 0) stack.pop();
+            else stack[stack.length - 1].p = np;
+          } else {
+            stack.push({ face, p });
+          }
+        }
+        return stack.map(item => item.face + (item.p === 2 ? "2" : item.p === 3 ? "'" : ""));
+      }
+
+      function solveCubeMoves(startNet) {
+        if (isSolved(startNet)) return [];
+
+        const ALL_MOVES = ["U", "U'", "U2", "D", "D'", "D2", "F", "F'", "F2", "B", "B'", "B2", "R", "R'", "R2", "L", "L'", "L2"];
+        const encode = (n) => ["U", "R", "F", "D", "L", "B"].map(f => n[f].join("")).join("");
+        const goalKey = ["U", "R", "F", "D", "L", "B"].map(f => startNet[f][4].repeat(9)).join("");
+
+        let fwd = new Map([[encode(startNet), { net: startNet, path: [] }]]);
+        let bwdNet = {};
+        ["U", "R", "F", "D", "L", "B"].forEach(f => { bwdNet[f] = Array(9).fill(startNet[f][4]); });
+        let bwd = new Map([[goalKey, { net: bwdNet, path: [] }]]);
+
+        const invMove = (m) => m.endsWith("2") ? m : m.endsWith("'") ? m[0] : m + "'";
+
+        for (let depth = 0; depth < 4; depth++) {
+          const nextFwd = new Map();
+          for (const [, node] of fwd) {
+            const lastFace = node.path.length ? node.path[node.path.length - 1][0] : "";
+            for (const mv of ALL_MOVES) {
+              if (mv[0] === lastFace) continue;
+              const nn = applyMoveToken(node.net, mv);
+              const k = encode(nn);
+              const np = node.path.concat(mv);
+              if (bwd.has(k)) {
+                const backPath = bwd.get(k).path.slice().reverse().map(invMove);
+                return simplifyMoves(np.concat(backPath));
+              }
+              if (!fwd.has(k) && !nextFwd.has(k)) nextFwd.set(k, { net: nn, path: np });
+            }
+          }
+          fwd = nextFwd;
+
+          const nextBwd = new Map();
+          for (const [, node] of bwd) {
+            const lastFace = node.path.length ? node.path[node.path.length - 1][0] : "";
+            for (const mv of ALL_MOVES) {
+              if (mv[0] === lastFace) continue;
+              const nn = applyMoveToken(node.net, mv);
+              const k = encode(nn);
+              const np = node.path.concat(mv);
+              if (fwd.has(k)) {
+                const backPath = np.slice().reverse().map(invMove);
+                return simplifyMoves(fwd.get(k).path.concat(backPath));
+              }
+              if (!bwd.has(k) && !nextBwd.has(k)) nextBwd.set(k, { net: nn, path: np });
+            }
+          }
+          bwd = nextBwd;
+        }
+
+        let cur = cloneNet(startNet);
+        const fullPath = [];
+        const dCol = cur.D[4], uCol = cur.U[4], fCol = cur.F[4], rCol = cur.R[4], bCol = cur.B[4], lCol = cur.L[4];
+
+        function bfsStage(goalFn, allowedMoves, maxNodes = 25000) {
+          if (goalFn(cur)) return true;
+          const queue = [{ net: cur, path: [] }];
+          const visited = new Set([encode(cur)]);
+          let idx = 0;
+          while (idx < queue.length && visited.size < maxNodes) {
+            const { net, path } = queue[idx++];
+            const lastFace = path.length ? path[path.length - 1][0] : "";
+            for (const mv of allowedMoves) {
+              if (mv[0] === lastFace) continue;
+              const nn = applyMoveToken(net, mv);
+              const key = encode(nn);
+              if (visited.has(key)) continue;
+              const np = path.concat(mv);
+              if (goalFn(nn)) {
+                cur = nn;
+                fullPath.push(...np);
+                return true;
+              }
+              visited.add(key);
+              queue.push({ net: nn, path: np });
+            }
+          }
+          return false;
+        }
+
+        bfsStage(n => n.D[1] === dCol && n.F[7] === fCol && n.D[5] === dCol && n.R[7] === rCol &&
+                      n.D[7] === dCol && n.B[7] === bCol && n.D[3] === dCol && n.L[7] === lCol, ALL_MOVES, 30000);
+
+        const f2lMacros = [
+          "U", "U'", "U2",
+          "R U R'", "R U' R'", "R U2 R'",
+          "L' U' L", "L' U L", "L' U2 L",
+          "F' U' F", "F' U F", "F U R U' R' F'",
+          "B U B'", "B' U' B"
+        ];
+        const f2lCheck = (n, slot) => {
+          const crossOk = n.D[1] === dCol && n.F[7] === fCol && n.D[5] === dCol && n.R[7] === rCol &&
+                          n.D[7] === dCol && n.B[7] === bCol && n.D[3] === dCol && n.L[7] === lCol;
+          if (!crossOk) return false;
+          const s0 = n.D[2] === dCol && n.F[8] === fCol && n.R[6] === rCol && n.F[5] === fCol && n.R[3] === rCol;
+          const s1 = n.D[0] === dCol && n.F[6] === fCol && n.L[8] === lCol && n.F[3] === fCol && n.L[5] === lCol;
+          const s2 = n.D[8] === dCol && n.R[8] === rCol && n.B[6] === bCol && n.R[5] === rCol && n.B[3] === bCol;
+          const s3 = n.D[6] === dCol && n.L[6] === lCol && n.B[8] === bCol && n.L[3] === lCol && n.B[5] === bCol;
+          if (slot === 1) return s0;
+          if (slot === 2) return s0 && s1;
+          if (slot === 3) return s0 && s1 && s2;
+          return s0 && s1 && s2 && s3;
+        };
+
+        function bfsMacroStage(goalFn, macros, maxNodes = 25000) {
+          if (goalFn(cur)) return true;
+          const queue = [{ net: cur, path: [] }];
+          const visited = new Set([encode(cur)]);
+          let idx = 0;
+          while (idx < queue.length && visited.size < maxNodes) {
+            const { net, path } = queue[idx++];
+            for (const mac of macros) {
+              const nn = applyAlg(net, mac);
+              const key = encode(nn);
+              if (visited.has(key)) continue;
+              const np = path.concat(mac.split(" "));
+              if (goalFn(nn)) {
+                cur = nn;
+                fullPath.push(...np);
+                return true;
+              }
+              visited.add(key);
+              queue.push({ net: nn, path: np });
+            }
+          }
+          return false;
+        }
+
+        bfsMacroStage(n => f2lCheck(n, 1), f2lMacros, 25000);
+        bfsMacroStage(n => f2lCheck(n, 2), f2lMacros, 25000);
+        bfsMacroStage(n => f2lCheck(n, 3), f2lMacros, 25000);
+        bfsMacroStage(n => f2lCheck(n, 4), f2lMacros, 25000);
+
+        const ollMacros = [
+          "U", "U'", "U2",
+          "F R U R' U' F'",
+          "R U R' U R U2 R'",
+          "R U2 R' U' R U' R'",
+          "R U R' U' R' F R F'"
+        ];
+        bfsMacroStage(n => f2lCheck(n, 4) && n.U.every(c => c === uCol), ollMacros, 30000);
+
+        const pllMacros = [
+          "U", "U'", "U2",
+          "R U R' F' R U R' U' R' F R2 U' R'",
+          "R2 U R U R' U' R' U' R' U R'",
+          "R U' R U R U R U' R' U' R2"
+        ];
+        bfsMacroStage(n => isSolved(n), pllMacros, 35000);
+
+        return simplifyMoves(fullPath);
+      }
+
+      function buildRobotStepsFromMoves(moves) {
+        let ori = { U: "U", D: "D", F: "F", B: "B", R: "R", L: "L" };
+
+        function simPushFlip(o) {
+          return { U: o.B, F: o.U, D: o.F, B: o.D, R: o.R, L: o.L };
+        }
+        function simRotateCW(o) {
+          return { U: o.U, D: o.D, F: o.R, R: o.B, B: o.L, L: o.F };
+        }
+        function simRotateCCW(o) {
+          return { U: o.U, D: o.D, F: o.L, L: o.B, B: o.R, R: o.F };
+        }
+
+        function findCurrentSlot(o, targetFace) {
+          for (const slot of ["D", "U", "F", "B", "R", "L"]) {
+            if (o[slot] === targetFace) return slot;
+          }
+          return "D";
+        }
+
+        return moves.map((mv, idx) => {
+          const targetFace = mv[0];
+          const turns = mv.endsWith("2") ? 2 : mv.endsWith("'") ? -1 : 1;
+          const actions = [];
+          const descParts = [];
+
+          let slot = findCurrentSlot(ori, targetFace);
+
+          if (slot === "R") {
+            actions.push({ type: "rotateC", turns: 1 });
+            descParts.push("поворот +90°");
+            ori = simRotateCW(ori);
+            slot = findCurrentSlot(ori, targetFace);
+          } else if (slot === "L") {
+            actions.push({ type: "rotateC", turns: -1 });
+            descParts.push("поворот -90°");
+            ori = simRotateCCW(ori);
+            slot = findCurrentSlot(ori, targetFace);
+          } else if (slot === "F") {
+            actions.push({ type: "rotateC", turns: 2 });
+            descParts.push("поворот 180°");
+            ori = simRotateCW(simRotateCW(ori));
+            slot = findCurrentSlot(ori, targetFace);
+          }
+
+          if (slot === "B") {
+            actions.push({ type: "flipA" });
+            descParts.push("толкнуть-вернуть");
+            ori = simPushFlip(ori);
+          } else if (slot === "U") {
+            actions.push({ type: "flipA" }, { type: "flipA" });
+            descParts.push("толкнуть-вернуть ×2");
+            ori = simPushFlip(simPushFlip(ori));
+          }
+
+          const angleLabel = turns === 2 ? "180°" : turns === -1 ? "-90°" : "+90°";
+          actions.push({ type: "clampB" });
+          actions.push({ type: "rotateC", turns });
+          actions.push({ type: "releaseB" });
+          descParts.push(`зажать → поворот ${angleLabel} → разжать`);
+
+          return {
+            index: idx + 1,
+            move: mv,
+            label: `Шаг ${idx + 1}: Грань ${mv} (${descParts.join(" → ")})`,
+            done: false,
+            actions
+          };
+        });
+      }
+
+      function renderStepsMonitor() {
+        const monitor = $("stepsMonitor");
+        const countBadge = $("stepsCountBadge");
+        if (!monitor) return;
+
+        if (countBadge) {
+          const doneCnt = state.plannedSteps.filter(s => s.done).length;
+          countBadge.textContent = state.plannedSteps.length
+            ? `${doneCnt}/${state.plannedSteps.length} шагов`
+            : "0 шагов";
+        }
+
+        if (!state.plannedSteps.length) {
+          monitor.innerHTML = `<div class="text-slate-500 text-[11px]">Отсканируйте все 6 граней кубика — здесь появится пошаговый план сборки.</div>`;
+          return;
+        }
+
+        monitor.innerHTML = "";
+        state.plannedSteps.forEach((step) => {
+          const row = document.createElement("div");
+          row.id = `stepRow_${step.index}`;
+          row.className = step.done
+            ? "px-2.5 py-1.5 rounded-lg bg-emerald-950/50 border border-emerald-700/60 text-emerald-400 font-semibold transition-colors"
+            : "px-2.5 py-1.5 rounded-lg bg-sky-950/40 border border-sky-800/60 text-sky-400 font-semibold transition-colors";
+          row.textContent = `${step.done ? "✓ " : "• "}${step.label}`;
+          monitor.appendChild(row);
+        });
+      }
+
+      function updatePlannedStepsFromCube() {
+        const movesBox = $("solveMovesDisplay");
+        if (!isCubeValid(state.cubeNet)) {
+          state.plannedSteps = [];
+          renderStepsMonitor();
+          if (movesBox) movesBox.classList.add("hidden");
+          return;
+        }
+
+        const moves = solveCubeMoves(state.cubeNet);
+        state.plannedSteps = buildRobotStepsFromMoves(moves);
+        renderStepsMonitor();
+
+        if (movesBox) {
+          movesBox.classList.remove("hidden");
+          movesBox.textContent = moves.length
+            ? `Алгоритм (${moves.length} ходов): ${moves.join(" ")}`
+            : "Кубик уже собран!";
+        }
+        logMsg(`Рассчитан план сборки: ${state.plannedSteps.length} шагов`);
+      }
+
       window.captureCurrentFace = function () {
         const sampled = sampleVideoGrid() || state.liveColors;
         state.cubeNet[state.activeFace] = sampled.slice();
-        renderAllCubeViews();
         logMsg(`Грань ${state.activeFace} считана: ${sampled.join("")}`);
+
+        const nextUnfilled = SCAN_ORDER.find(f => state.cubeNet[f].includes("X"));
+        if (nextUnfilled) {
+          state.activeFace = nextUnfilled;
+        }
+
+        renderAllCubeViews();
+        updatePlannedStepsFromCube();
       };
 
       window.fillDemoCube = function () {
-        state.cubeNet = {
+        let demo = {
           U: Array(9).fill("W"),
           L: Array(9).fill("O"),
           F: Array(9).fill("G"),
@@ -939,15 +1427,23 @@
           B: Array(9).fill("B"),
           D: Array(9).fill("Y")
         };
+        demo = applyAlg(demo, "R U R' U' F2 D' L");
+        state.cubeNet = demo;
         renderAllCubeViews();
-        logMsg("Заполнена тестовая собранная развертка");
+        updatePlannedStepsFromCube();
+        logMsg("Заполнена тестовая развертка и рассчитаны шаги сборки");
       };
 
       window.clearCubeNet = function () {
         for (const f of Object.keys(state.cubeNet)) {
           state.cubeNet[f] = Array(9).fill("X");
         }
+        state.activeFace = "U";
+        state.plannedSteps = [];
         renderAllCubeViews();
+        renderStepsMonitor();
+        const movesBox = $("solveMovesDisplay");
+        if (movesBox) movesBox.classList.add("hidden");
       };
 
       function renderAllCubeViews() {
@@ -980,6 +1476,7 @@
               const nextIdx = (COLOR_CYCLE.indexOf(c) + 1) % COLOR_CYCLE.length;
               state.cubeNet[state.activeFace][idx] = COLOR_CYCLE[nextIdx];
               renderAllCubeViews();
+              updatePlannedStepsFromCube();
             };
             editor.appendChild(btn);
           });
@@ -1003,21 +1500,41 @@
         }
         const valBadge = $("validationBadge");
         if (valBadge) {
-          const valid = filled === 54 && COLOR_CYCLE.every((k) => counts[k] === 9);
+          const valid = isCubeValid(state.cubeNet);
           valBadge.textContent = valid ? "Готово (54/54)" : `Заполнено ${filled}/54`;
           valBadge.className = valid ? "text-[11px] font-mono text-emerald-400" : "text-[11px] font-mono text-amber-400";
         }
       }
 
+      async function executeRobotAction(act) {
+        if (state.emergencyStop) return;
+        if (act.type === "rotateC") {
+          await window.rotatePlatformC(act.turns);
+        } else if (act.type === "clampB") {
+          await window.clampClawB();
+        } else if (act.type === "releaseB") {
+          await window.releaseClawB();
+        } else if (act.type === "flipA") {
+          await window.flipCubeCycle();
+        }
+      }
+
       window.runAutoSolvePipeline = async function () {
-        if (state.autoSolving) return;
+        if (state.autoSolving) {
+          if (state.isPaused) {
+            state.isPaused = false;
+            updatePlayPauseUI();
+          }
+          return;
+        }
         state.emergencyStop = false;
+        state.isPaused = false;
         state.autoSolving = true;
+        updatePlayPauseUI();
 
         const stage = $("autoStageText");
         const pct = $("autoPercentText");
         const bar = $("autoProgressBar");
-        const movesBox = $("solveMovesDisplay");
 
         const setProgress = (p, text) => {
           if (stage) stage.textContent = text;
@@ -1026,29 +1543,61 @@
         };
 
         try {
-          setProgress(15, "Проверка развертки кубика...");
-          await sleep(300);
+          setProgress(10, "Проверка развертки кубика...");
+          await sleep(200);
           if (state.emergencyStop) return;
 
-          const demoMoves = ["R", "U", "R'", "U'", "F2", "D", "L'"];
-          if (movesBox) {
-            movesBox.classList.remove("hidden");
-            movesBox.textContent = "Алгоритм: " + demoMoves.join(" ");
+          if (!isCubeValid(state.cubeNet)) {
+            setProgress(0, "Ошибка: отсканируйте корректно все 6 граней (54 клетки)");
+            logMsg("Автосборка отменена: развертка неполная или некорректная");
+            return;
           }
 
-          for (let i = 0; i < demoMoves.length; i++) {
+          if (!state.plannedSteps.length) {
+            updatePlannedStepsFromCube();
+          }
+
+          const steps = state.plannedSteps;
+          if (!steps.length) {
+            setProgress(100, "Кубик уже собран!");
+            return;
+          }
+
+          for (let i = 0; i < steps.length; i++) {
             if (state.emergencyStop) return;
-            const p = 20 + Math.round(((i + 1) / demoMoves.length) * 80);
-            setProgress(p, `Выполнение хода ${i + 1}/${demoMoves.length}: ${demoMoves[i]}`);
-            await window.clampClawB();
-            await window.rotatePlatformC(demoMoves[i].includes("2") ? 2 : demoMoves[i].includes("'") ? -1 : 1);
-            await window.releaseClawB();
+            await waitWhilePaused();
+            if (state.emergencyStop) return;
+
+            const step = steps[i];
+            if (step.done) continue;
+
+            const p = 15 + Math.round(((i + 1) / steps.length) * 85);
+            setProgress(p, `Выполнение: ${step.label}`);
+
+            for (const act of step.actions) {
+              if (state.emergencyStop) return;
+              await waitWhilePaused();
+              if (state.emergencyStop) return;
+
+              await executeRobotAction(act);
+              await sleep(90);
+            }
+
+            if (state.emergencyStop) return;
+            step.done = true;
+            renderStepsMonitor();
+            const rowEl = $(`stepRow_${step.index}`);
+            if (rowEl) rowEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
           }
 
-          setProgress(100, "Кубик собран!");
-          logMsg("Автосборка успешно завершена");
+          if (!state.emergencyStop) {
+            setProgress(100, "Кубик собран!");
+            logMsg("Автосборка успешно завершена");
+          }
         } finally {
           state.autoSolving = false;
+          state.isPaused = false;
+          updatePlayPauseUI();
         }
       };
 
@@ -1120,6 +1669,8 @@
 
       syncSettingsUI();
       renderAllCubeViews();
+      renderStepsMonitor();
+      updatePlayPauseUI();
     })();
   </script>
 </body>
