@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LEGO Boost Rubik's Cube Solver v0.20</title>
+  <title>LEGO Boost Rubik's Cube Solver v0.21</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -108,8 +108,8 @@
   <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
   <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-3 pt-1.5 pb-2.5">
     <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1.5 px-1">
-      <span id="appVersion" class="text-sky-400 font-bold">v0.20</span>
-      <span id="jsStatus" class="text-emerald-400">SYSTEM: READY (STRICT SINGLE-FACE CAPTURE)</span>
+      <span id="appVersion" class="text-sky-400 font-bold">v0.21</span>
+      <span id="jsStatus" class="text-emerald-400">SYSTEM: READY (SEPARATE CAPTURE &amp; FLIP)</span>
     </div>
 
     <div class="flex items-center justify-between gap-2">
@@ -236,7 +236,7 @@
 
       <!-- Статус пошагового сканирования всех 6 сторон -->
       <div id="scanSequenceStatus" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-sky-300 font-medium">
-        Шаг 1/6: Грань [U] под камерой. Нажмите «Плэй / Шаг» для записи [U] и переворота на [F].
+        Грань 1/6 [U] под камерой. Нажмите «Считать в грань [U]», затем «Плэй / Шаг» для переворота на [F].
       </div>
 
       <!-- Схема развертки 4x3 -->
@@ -583,7 +583,6 @@
         scanningStepBusy: false,
         lastScanClickTs: 0,
         scanIndex: 0,
-        scanCompleted: false,
         scannedFaces: { U: false, L: false, F: false, R: false, B: false, D: false },
         isPaused: false,
         mediaStream: null,
@@ -606,7 +605,7 @@
       };
 
       try {
-        const saved = localStorage.getItem("lego_rubik_cfg_v020");
+        const saved = localStorage.getItem("lego_rubik_cfg_v021");
         if (saved) Object.assign(state.config, JSON.parse(saved));
       } catch (e) {}
 
@@ -614,7 +613,7 @@
 
       function saveConfig() {
         try {
-          localStorage.setItem("lego_rubik_cfg_v020", JSON.stringify(state.config));
+          localStorage.setItem("lego_rubik_cfg_v021", JSON.stringify(state.config));
         } catch (e) {}
       }
 
@@ -648,7 +647,7 @@
         const btn = $("btnScanPlayStep");
         const lbl = $("btnScanPlayStepLabel");
         if (btn) btn.disabled = !!locked;
-        if (lbl) lbl.textContent = locked ? "Ход моторов..." : "Плэй / Шаг";
+        if (lbl) lbl.textContent = locked ? "Переворот..." : "Плэй / Шаг";
       }
 
       // --- КОНВЕРТАЦИЯ RGB -> HSV И УСТОЙЧИВАЯ КЛАССИФИКАЦИЯ ---
@@ -680,70 +679,6 @@
         if (h >= 75 && h < 175) return "G";
         if (h >= 175 && h < 275) return "B";
         return "R";
-      }
-
-      function recalibrateAllFacesByCenters() {
-        const faces = ["U", "F", "R", "B", "L", "D"];
-        if (!faces.every((f) => Array.isArray(state.rawCapturedRgb[f]) && state.rawCapturedRgb[f].length === 9)) {
-          return false;
-        }
-
-        const centers = faces.map((f) => {
-          const rgb = state.rawCapturedRgb[f][4];
-          const hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
-          return { face: f, rgb, hsv };
-        });
-
-        let whiteCenter = centers[0];
-        for (const c of centers) {
-          if (c.hsv.s < whiteCenter.hsv.s) whiteCenter = c;
-        }
-        whiteCenter.assignedColor = "W";
-
-        const chromatic = centers.filter((c) => c !== whiteCenter);
-        const normHue = (h) => (h >= 330 ? h - 360 : h);
-        chromatic.sort((a, b) => normHue(a.hsv.h) - normHue(b.hsv.h));
-
-        const hueOrder = ["R", "O", "Y", "G", "B"];
-        chromatic.forEach((c, idx) => {
-          c.assignedColor = hueOrder[idx];
-        });
-
-        const hueDist = (h1, h2) => {
-          const d = Math.abs(h1 - h2);
-          return Math.min(d, 360 - d);
-        };
-
-        for (const f of faces) {
-          const rawFace = state.rawCapturedRgb[f];
-          const mapped = rawFace.map((rgb, idx) => {
-            if (idx === 4) {
-              const own = centers.find((c) => c.face === f);
-              return own ? own.assignedColor : classifyRgbHsv(rgb[0], rgb[1], rgb[2]);
-            }
-            const hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
-            if (hsv.s <= whiteCenter.hsv.s + 0.14 && hsv.s < 0.34) {
-              return "W";
-            }
-            let bestCol = "W";
-            let minScore = Infinity;
-            for (const c of chromatic) {
-              const hd = hueDist(hsv.h, c.hsv.h) / 180;
-              const sd = Math.abs(hsv.s - c.hsv.s) * 0.35;
-              const vd = Math.abs(hsv.v - c.hsv.v) * 0.25;
-              const score = hd + sd + vd;
-              if (score < minScore) {
-                minScore = score;
-                bestCol = c.assignedColor;
-              }
-            }
-            return bestCol;
-          });
-          state.cubeNet[f] = mapped.slice();
-        }
-
-        logMsg("Выполнена автокалибровка всех 54 наклеек по 6 центрам кубика");
-        return true;
       }
 
       function updatePlayPauseUI() {
@@ -1165,7 +1100,6 @@
         } catch (e) {}
       };
 
-      // Читает актуальный кадр с видеопотока; если видео не запущено — возвращает null (никогда не подставляет старый буфер)
       function captureFreshFrameGrid() {
         const video = $("cameraVideo");
         const canvas = $("captureCanvas");
@@ -1210,17 +1144,12 @@
       function startLivePreviewLoop() {
         if (state.liveTimer) clearInterval(state.liveTimer);
         state.liveTimer = setInterval(() => {
-          if (!state.scanningStepBusy) {
-            captureFreshFrameGrid();
-          }
+          captureFreshFrameGrid();
         }, 250);
       }
 
-      function commitFaceColors(faceKey, colorsArr, rawRgbArr, allowOverwrite = false) {
-        if (!state.cubeNet[faceKey]) return false;
-        if (state.scannedFaces[faceKey] && !allowOverwrite) {
-          return false;
-        }
+      function commitFaceColors(faceKey, colorsArr, rawRgbArr) {
+        if (!state.cubeNet[faceKey]) return;
         const frozenColors = Array.from({ length: 9 }, (_, i) => {
           const val = colorsArr && colorsArr[i];
           return COLORS[val] ? val : "X";
@@ -1230,7 +1159,6 @@
         if (Array.isArray(rawRgbArr) && rawRgbArr.length === 9) {
           state.rawCapturedRgb[faceKey] = rawRgbArr.map((c) => (Array.isArray(c) ? c.slice() : [128, 128, 128]));
         }
-        return true;
       }
 
       // --- МОДЕЛЬ КУБИКА, РЕШАТЕЛЬ И ГЕНЕРАЦИЯ ШАГОВ ПОД ВЕРХНЮЮ КАМЕРУ ---
@@ -1403,651 +1331,4 @@
               const nn = applyMoveToken(net, mv);
               const key = encode(nn);
               if (visited.has(key)) continue;
-              const np = path.concat(mv);
-              if (goalFn(nn)) {
-                cur = nn;
-                fullPath.push(...np);
-                return true;
-              }
-              visited.add(key);
-              queue.push({ net: nn, path: np });
-            }
-          }
-          return false;
-        }
-
-        bfsStage(n => n.D[1] === dCol && n.F[7] === fCol && n.D[5] === dCol && n.R[7] === rCol &&
-                      n.D[7] === dCol && n.B[7] === bCol && n.D[3] === dCol && n.L[7] === lCol, ALL_MOVES, 30000);
-
-        const f2lMacros = [
-          "U", "U'", "U2",
-          "R U R'", "R U' R'", "R U2 R'",
-          "L' U' L", "L' U L", "L' U2 L",
-          "F' U' F", "F' U F", "F U R U' R' F'",
-          "B U B'", "B' U' B"
-        ];
-        const f2lCheck = (n, slot) => {
-          const crossOk = n.D[1] === dCol && n.F[7] === fCol && n.D[5] === dCol && n.R[7] === rCol &&
-                          n.D[7] === dCol && n.B[7] === bCol && n.D[3] === dCol && n.L[7] === lCol;
-          if (!crossOk) return false;
-          const s0 = n.D[2] === dCol && n.F[8] === fCol && n.R[6] === rCol && n.F[5] === fCol && n.R[3] === rCol;
-          const s1 = n.D[0] === dCol && n.F[6] === fCol && n.L[8] === lCol && n.F[3] === fCol && n.L[5] === lCol;
-          const s2 = n.D[8] === dCol && n.R[8] === rCol && n.B[6] === bCol && n.R[5] === rCol && n.B[3] === bCol;
-          const s3 = n.D[6] === dCol && n.L[6] === lCol && n.B[8] === bCol && n.L[3] === lCol && n.B[5] === bCol;
-          if (slot === 1) return s0;
-          if (slot === 2) return s0 && s1;
-          if (slot === 3) return s0 && s1 && s2;
-          return s0 && s1 && s2 && s3;
-        };
-
-        function bfsMacroStage(goalFn, macros, maxNodes = 25000) {
-          if (goalFn(cur)) return true;
-          const queue = [{ net: cur, path: [] }];
-          const visited = new Set([encode(cur)]);
-          let idx = 0;
-          while (idx < queue.length && visited.size < maxNodes) {
-            const { net, path } = queue[idx++];
-            for (const mac of macros) {
-              const nn = applyAlg(net, mac);
-              const key = encode(nn);
-              if (visited.has(key)) continue;
-              const np = path.concat(mac.split(" "));
-              if (goalFn(nn)) {
-                cur = nn;
-                fullPath.push(...np);
-                return true;
-              }
-              visited.add(key);
-              queue.push({ net: nn, path: np });
-            }
-          }
-          return false;
-        }
-
-        bfsMacroStage(n => f2lCheck(n, 1), f2lMacros, 25000);
-        bfsMacroStage(n => f2lCheck(n, 2), f2lMacros, 25000);
-        bfsMacroStage(n => f2lCheck(n, 3), f2lMacros, 25000);
-        bfsMacroStage(n => f2lCheck(n, 4), f2lMacros, 25000);
-
-        const ollMacros = [
-          "U", "U'", "U2",
-          "F R U R' U' F'",
-          "R U R' U R U2 R'",
-          "R U2 R' U' R U' R'",
-          "R U R' U' R' F R F'"
-        ];
-        bfsMacroStage(n => f2lCheck(n, 4) && n.U.every(c => c === uCol), ollMacros, 30000);
-
-        const pllMacros = [
-          "U", "U'", "U2",
-          "R U R' F' R U R' U' R' F R2 U' R'",
-          "R2 U R U R' U' R' U' R' U R'",
-          "R U' R U R U R U' R' U' R2"
-        ];
-        bfsMacroStage(n => isSolved(n), pllMacros, 35000);
-
-        return simplifyMoves(fullPath);
-      }
-
-      function simPushFlip(o) {
-        return { U: o.F, B: o.U, D: o.B, F: o.D, R: o.R, L: o.L };
-      }
-
-      function buildRobotStepsFromMoves(moves) {
-        let ori = { U: "U", D: "D", F: "F", B: "B", R: "R", L: "L" };
-
-        function simRotateCW(o) {
-          return { U: o.U, D: o.D, F: o.R, R: o.B, B: o.L, L: o.F };
-        }
-        function simRotateCCW(o) {
-          return { U: o.U, D: o.D, F: o.L, L: o.B, B: o.R, R: o.F };
-        }
-
-        function findCurrentSlot(o, targetFace) {
-          for (const slot of ["D", "U", "F", "B", "R", "L"]) {
-            if (o[slot] === targetFace) return slot;
-          }
-          return "D";
-        }
-
-        return moves.map((mv, idx) => {
-          const targetFace = mv[0];
-          const turns = mv.endsWith("2") ? 2 : mv.endsWith("'") ? -1 : 1;
-          const actions = [];
-          const descParts = [];
-
-          let slot = findCurrentSlot(ori, targetFace);
-
-          if (slot === "R") {
-            actions.push({ type: "rotateC", turns: 1 });
-            descParts.push("поворот +90°");
-            ori = simRotateCW(ori);
-            slot = findCurrentSlot(ori, targetFace);
-          } else if (slot === "L") {
-            actions.push({ type: "rotateC", turns: -1 });
-            descParts.push("поворот -90°");
-            ori = simRotateCCW(ori);
-            slot = findCurrentSlot(ori, targetFace);
-          } else if (slot === "F") {
-            actions.push({ type: "rotateC", turns: 2 });
-            descParts.push("поворот 180°");
-            ori = simRotateCW(simRotateCW(ori));
-            slot = findCurrentSlot(ori, targetFace);
-          }
-
-          if (slot === "B") {
-            actions.push({ type: "flipA" });
-            descParts.push("толкнуть-вернуть");
-            ori = simPushFlip(ori);
-          } else if (slot === "U") {
-            actions.push({ type: "flipA" }, { type: "flipA" });
-            descParts.push("толкнуть-вернуть ×2");
-            ori = simPushFlip(simPushFlip(ori));
-          }
-
-          const angleLabel = turns === 2 ? "180°" : turns === -1 ? "-90°" : "+90°";
-          actions.push({ type: "clampB" });
-          actions.push({ type: "rotateC", turns });
-          actions.push({ type: "releaseB" });
-          descParts.push(`зажать → поворот ${angleLabel} → разжать`);
-
-          return {
-            index: idx + 1,
-            move: mv,
-            label: `Шаг ${idx + 1}: Грань ${mv} (${descParts.join(" → ")})`,
-            done: false,
-            actions
-          };
-        });
-      }
-
-      function renderStepsMonitor() {
-        const monitor = $("stepsMonitor");
-        const countBadge = $("stepsCountBadge");
-        if (!monitor) return;
-
-        if (countBadge) {
-          const doneCnt = state.plannedSteps.filter(s => s.done).length;
-          countBadge.textContent = state.plannedSteps.length
-            ? `${doneCnt}/${state.plannedSteps.length} шагов`
-            : "0 шагов";
-        }
-
-        if (!state.plannedSteps.length) {
-          monitor.innerHTML = `<div class="text-slate-500 text-[11px]">Отсканируйте все 6 граней кубика — здесь появится пошаговый план сборки.</div>`;
-          return;
-        }
-
-        monitor.innerHTML = "";
-        state.plannedSteps.forEach((step) => {
-          const row = document.createElement("div");
-          row.id = `stepRow_${step.index}`;
-          row.className = step.done
-            ? "px-2.5 py-1.5 rounded-lg bg-emerald-950/50 border border-emerald-700/60 text-emerald-400 font-semibold transition-colors"
-            : "px-2.5 py-1.5 rounded-lg bg-sky-950/40 border border-sky-800/60 text-sky-400 font-semibold transition-colors";
-          row.textContent = `${step.done ? "✓ " : "• "}${step.label}`;
-          monitor.appendChild(row);
-        });
-      }
-
-      function updatePlannedStepsFromCube() {
-        const movesBox = $("solveMovesDisplay");
-        if (!isCubeValid(state.cubeNet)) {
-          state.plannedSteps = [];
-          renderStepsMonitor();
-          if (movesBox) movesBox.classList.add("hidden");
-          return;
-        }
-
-        const moves = solveCubeMoves(state.cubeNet);
-        state.plannedSteps = buildRobotStepsFromMoves(moves);
-        renderStepsMonitor();
-
-        if (movesBox) {
-          movesBox.classList.remove("hidden");
-          movesBox.textContent = moves.length
-            ? `Алгоритм (${moves.length} ходов): ${moves.join(" ")}`
-            : "Кубик уже собран!";
-        }
-        logMsg(`Рассчитан план сборки: ${state.plannedSteps.length} шагов`);
-      }
-
-      // Пошаговое сканирование 6 граней начиная с верхней U:
-      // 1 клик = считывает ровно 1 текущую грань под камерой и подводит следующую
-      window.playScanStep = async function () {
-        const now = performance.now();
-        if (now - state.lastScanClickTs < 1200) return;
-        state.lastScanClickTs = now;
-
-        if (state.scanningStepBusy || state.autoSolving || state.steppingSingle) return;
-
-        if (state.scanCompleted) {
-          setScanStatusText("Все 6 сторон уже зафиксированы. Нажмите «Очистить всё», если нужно пересканировать заново.", "done");
-          return;
-        }
-
-        state.emergencyStop = false;
-        state.scanningStepBusy = true;
-        setScanBtnLocked(true);
-
-        try {
-          const targetIdx = SCAN_ORDER.findIndex((f) => !state.scannedFaces[f]);
-          if (targetIdx === -1) {
-            state.scanCompleted = true;
-            return;
-          }
-
-          state.scanIndex = targetIdx;
-          const currentFace = SCAN_ORDER[targetIdx];
-          state.activeFace = currentFace;
-          renderAllCubeViews();
-
-          // Пауза стабилизации кадра перед захватом
-          await sleep(250);
-          const snap = captureFreshFrameGrid();
-          if (!snap) {
-            setScanStatusText("Ошибка: камера не активна. Включите камеру перед сканированием.", "warn");
-            logMsg("Сканирование прервано: видеопоток камеры не готов");
-            return;
-          }
-
-          commitFaceColors(currentFace, snap.colors, snap.rawRgb, false);
-          const recordedStr = state.cubeNet[currentFace].join("");
-          logMsg(`Сканирование [${targetIdx + 1}/6]: записана грань ${currentFace} = ${recordedStr}`);
-          renderAllCubeViews();
-
-          if (targetIdx < SCAN_ORDER.length - 1) {
-            const nextIndex = targetIdx + 1;
-            const nextFace = SCAN_ORDER[nextIndex];
-            state.scanIndex = nextIndex;
-            state.activeFace = nextFace;
-            renderAllCubeViews();
-            setScanStatusText(`Записана [${currentFace}] (${recordedStr}). Переворот кубика на [${nextFace}]...`, "info");
-
-            if (nextFace !== "F") {
-              await window.rotatePlatformC(-1);
-              if (state.emergencyStop) return;
-              await sleep(160);
-            }
-            await window.flipCubeCycle();
-            if (state.emergencyStop) return;
-            await sleep(500);
-
-            // Обновляем только точки прицела поверх видео, состояние развертки не трогаем
-            captureFreshFrameGrid();
-            setScanStatusText(
-              `Шаг ${nextIndex + 1}/6: Грань [${nextFace}] под камерой. Нажмите «Плэй / Шаг» для записи [${nextFace}].`,
-              "info"
-            );
-          } else {
-            state.scanCompleted = true;
-            setScanStatusText("Все 6 сторон записаны. Калибровка цветов по 6 центрам...", "info");
-
-            recalibrateAllFacesByCenters();
-            renderAllCubeViews();
-
-            await wigglePlatform45C();
-            if (state.emergencyStop) return;
-
-            updatePlannedStepsFromCube();
-            const valid = isCubeValid(state.cubeNet);
-            const msg = valid
-              ? "Все стороны отсканированы и откалиброваны (54/54)! Переходите к разделу «4. Сборка и монитор шагов»."
-              : "Все 6 сторон записаны. Проверьте счетчик цветов (должно быть по 9 каждого) и при необходимости поправьте клетки кликом.";
-            setScanStatusText(msg, valid ? "done" : "warn");
-            logMsg(msg);
-          }
-        } finally {
-          state.scanningStepBusy = false;
-          setScanBtnLocked(false);
-        }
-      };
-
-      window.captureCurrentFace = function () {
-        if (state.scanningStepBusy) return;
-        const targetFace = state.activeFace;
-        const snap = captureFreshFrameGrid();
-        if (!snap) {
-          logMsg("Камера не активна — невозможно считать грань");
-          return;
-        }
-        commitFaceColors(targetFace, snap.colors, snap.rawRgb, true);
-        logMsg(`Грань ${targetFace} считана вручную: ${state.cubeNet[targetFace].join("")}`);
-
-        renderAllCubeViews();
-        updatePlannedStepsFromCube();
-      };
-
-      window.fillDemoCube = function () {
-        let demo = {
-          U: Array(9).fill("W"),
-          L: Array(9).fill("O"),
-          F: Array(9).fill("G"),
-          R: Array(9).fill("R"),
-          B: Array(9).fill("B"),
-          D: Array(9).fill("Y")
-        };
-        demo = applyAlg(demo, "R U R' U' F2 D' L");
-        state.cubeNet = cloneNet(demo);
-        state.rawCapturedRgb = createFreshRawNet();
-        state.scannedFaces = { U: true, L: true, F: true, R: true, B: true, D: true };
-        state.scanIndex = 0;
-        state.scanCompleted = true;
-        renderAllCubeViews();
-        updatePlannedStepsFromCube();
-        logMsg("Заполнена тестовая развертка и рассчитаны шаги сборки");
-      };
-
-      window.clearCubeNet = function () {
-        state.cubeNet = createFreshNet();
-        state.rawCapturedRgb = createFreshRawNet();
-        state.scannedFaces = { U: false, L: false, F: false, R: false, B: false, D: false };
-        state.activeFace = "U";
-        state.scanIndex = 0;
-        state.scanCompleted = false;
-        state.plannedSteps = [];
-        setScanStatusText("Шаг 1/6: Грань [U] под камерой. Нажмите «Плэй / Шаг» для записи [U] и переворота на [F].", "info");
-        renderAllCubeViews();
-        renderStepsMonitor();
-        const movesBox = $("solveMovesDisplay");
-        if (movesBox) movesBox.classList.add("hidden");
-      };
-
-      function renderAllCubeViews() {
-        document.querySelectorAll(".face-box").forEach((box) => {
-          const f = box.dataset.face;
-          const faceColors = state.cubeNet[f] || Array(9).fill("X");
-          box.classList.toggle("active-face", f === state.activeFace);
-          box.classList.toggle("scanned-face", !!state.scannedFaces[f] && f !== state.activeFace);
-          box.innerHTML = "";
-          faceColors.forEach((c) => {
-            const s = document.createElement("div");
-            s.className = "sticker";
-            s.style.backgroundColor = (COLORS[c] || COLORS.X).hex;
-            box.appendChild(s);
-          });
-        });
-
-        const badge = $("activeFaceBadge");
-        if (badge) badge.textContent = state.activeFace;
-        const title = $("selectedFaceTitle");
-        if (title) title.textContent = FACE_NAMES[state.activeFace];
-
-        const editor = $("activeFaceEditor");
-        if (editor) {
-          const curFaceKey = state.activeFace;
-          const curColors = state.cubeNet[curFaceKey] || Array(9).fill("X");
-          editor.innerHTML = "";
-          curColors.forEach((c, idx) => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "aspect-square rounded-md border border-slate-600 cursor-pointer";
-            btn.style.backgroundColor = (COLORS[c] || COLORS.X).hex;
-            btn.onclick = () => {
-              const latest = state.cubeNet[curFaceKey][idx];
-              const nextIdx = (COLOR_CYCLE.indexOf(latest) + 1) % COLOR_CYCLE.length;
-              state.cubeNet[curFaceKey][idx] = COLOR_CYCLE[nextIdx];
-              renderAllCubeViews();
-              updatePlannedStepsFromCube();
-            };
-            editor.appendChild(btn);
-          });
-        }
-
-        const counts = { W: 0, Y: 0, R: 0, O: 0, B: 0, G: 0 };
-        let filled = 0;
-        for (const f of Object.keys(state.cubeNet)) {
-          for (const c of state.cubeNet[f]) {
-            if (counts[c] !== undefined) {
-              counts[c]++;
-              filled++;
-            }
-          }
-        }
-        const countersEl = $("colorCounters");
-        if (countersEl) {
-          countersEl.innerHTML = COLOR_CYCLE.map(
-            (k) => `<span style="color:${COLORS[k].hex}" class="${counts[k] === 9 ? 'font-bold underline' : ''}">${k}:${counts[k]}</span>`
-          ).join("");
-        }
-        const valBadge = $("validationBadge");
-        if (valBadge) {
-          const valid = isCubeValid(state.cubeNet);
-          valBadge.textContent = valid ? "Готово (54/54)" : `Заполнено ${filled}/54`;
-          valBadge.className = valid ? "text-[11px] font-mono text-emerald-400" : "text-[11px] font-mono text-amber-400";
-        }
-      }
-
-      async function executeRobotAction(act) {
-        if (state.emergencyStop) return;
-        if (act.type === "rotateC") {
-          await window.rotatePlatformC(act.turns);
-        } else if (act.type === "clampB") {
-          await window.clampClawB();
-        } else if (act.type === "releaseB") {
-          await window.releaseClawB();
-        } else if (act.type === "flipA") {
-          await window.flipCubeCycle();
-        }
-      }
-
-      window.runSingleStepSolve = async function () {
-        if (state.autoSolving || state.steppingSingle || state.scanningStepBusy) return;
-        state.emergencyStop = false;
-        state.isPaused = false;
-
-        const stage = $("autoStageText");
-        const pct = $("autoPercentText");
-        const bar = $("autoProgressBar");
-
-        if (!isCubeValid(state.cubeNet)) {
-          if (stage) stage.textContent = "Ошибка: отсканируйте корректно все 6 граней (54 клетки)";
-          logMsg("Один шаг отменен: развертка неполная или некорректная");
-          return;
-        }
-
-        if (!state.plannedSteps.length) {
-          updatePlannedStepsFromCube();
-        }
-
-        const steps = state.plannedSteps;
-        const nextIdx = steps.findIndex((s) => !s.done);
-        if (nextIdx === -1) {
-          if (stage) stage.textContent = "Кубик уже собран!";
-          if (pct) pct.textContent = "100%";
-          if (bar) bar.style.width = "100%";
-          return;
-        }
-
-        state.steppingSingle = true;
-        const step = steps[nextIdx];
-        if (stage) stage.textContent = `Один шаг: ${step.label}`;
-        logMsg(`Выполнение одного шага: ${step.label}`);
-
-        try {
-          for (const act of step.actions) {
-            if (state.emergencyStop) return;
-            await executeRobotAction(act);
-            await sleep(90);
-          }
-
-          if (state.emergencyStop) return;
-          step.done = true;
-          renderStepsMonitor();
-
-          const doneCnt = steps.filter((s) => s.done).length;
-          const p = Math.round((doneCnt / steps.length) * 100);
-          if (pct) pct.textContent = p + "%";
-          if (bar) bar.style.width = p + "%";
-          if (stage) {
-            stage.textContent = doneCnt === steps.length
-              ? "Кубик собран!"
-              : `Выполнен шаг ${step.index}/${steps.length} (ожидание)`;
-          }
-
-          const rowEl = $(`stepRow_${step.index}`);
-          if (rowEl) rowEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
-        } finally {
-          state.steppingSingle = false;
-        }
-      };
-
-      window.runAutoSolvePipeline = async function () {
-        if (state.steppingSingle || state.scanningStepBusy) return;
-        if (state.autoSolving) {
-          if (state.isPaused) {
-            state.isPaused = false;
-            updatePlayPauseUI();
-          }
-          return;
-        }
-        state.emergencyStop = false;
-        state.isPaused = false;
-        state.autoSolving = true;
-        updatePlayPauseUI();
-
-        const stage = $("autoStageText");
-        const pct = $("autoPercentText");
-        const bar = $("autoProgressBar");
-
-        const setProgress = (p, text) => {
-          if (stage) stage.textContent = text;
-          if (pct) pct.textContent = p + "%";
-          if (bar) bar.style.width = p + "%";
-        };
-
-        try {
-          setProgress(10, "Проверка развертки кубика...");
-          await sleep(200);
-          if (state.emergencyStop) return;
-
-          if (!isCubeValid(state.cubeNet)) {
-            setProgress(0, "Ошибка: отсканируйте корректно все 6 граней (54 клетки)");
-            logMsg("Автосборка отменена: развертка неполная или некорректная");
-            return;
-          }
-
-          if (!state.plannedSteps.length) {
-            updatePlannedStepsFromCube();
-          }
-
-          const steps = state.plannedSteps;
-          if (!steps.length) {
-            setProgress(100, "Кубик уже собран!");
-            return;
-          }
-
-          for (let i = 0; i < steps.length; i++) {
-            if (state.emergencyStop) return;
-            await waitWhilePaused();
-            if (state.emergencyStop) return;
-
-            const step = steps[i];
-            if (step.done) continue;
-
-            const p = 15 + Math.round(((i + 1) / steps.length) * 85);
-            setProgress(p, `Выполнение: ${step.label}`);
-
-            for (const act of step.actions) {
-              if (state.emergencyStop) return;
-              await waitWhilePaused();
-              if (state.emergencyStop) return;
-
-              await executeRobotAction(act);
-              await sleep(90);
-            }
-
-            if (state.emergencyStop) return;
-            step.done = true;
-            renderStepsMonitor();
-            const rowEl = $(`stepRow_${step.index}`);
-            if (rowEl) rowEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
-          }
-
-          if (!state.emergencyStop) {
-            setProgress(100, "Кубик собран!");
-            logMsg("Автосборка успешно завершена");
-          }
-        } finally {
-          state.autoSolving = false;
-          state.isPaused = false;
-          updatePlayPauseUI();
-        }
-      };
-
-      function syncSettingsUI() {
-        const bindCheck = (id, key) => {
-          const el = $(id);
-          if (!el) return;
-          el.checked = !!state.config[key];
-          el.onchange = () => { state.config[key] = el.checked; saveConfig(); };
-        };
-        const bindRange = (id, valId, key, suffix = "°") => {
-          const el = $(id);
-          const vEl = $(valId);
-          if (!el) return;
-          el.value = state.config[key];
-          if (vEl) vEl.textContent = state.config[key] + suffix;
-          el.oninput = () => {
-            state.config[key] = Number(el.value);
-            if (vEl) vEl.textContent = state.config[key] + suffix;
-            saveConfig();
-          };
-        };
-
-        bindCheck("invA", "invA");
-        bindRange("rangeDegA", "valDegA", "degA", "°");
-        bindRange("rangeSpdA", "valSpdA", "spdA", "%");
-
-        bindCheck("invB", "invB");
-        bindRange("rangeDegB", "valDegB", "degB", "°");
-        bindRange("rangeSpdB", "valSpdB", "spdB", "%");
-
-        bindCheck("invC", "invC");
-        bindRange("rangeCalib90C", "valCalib90C", "calib90C", "°");
-        bindRange("rangeBacklashC", "valBacklashC", "backlashC", "°");
-        bindRange("rangeSpdC", "valSpdC", "spdC", "%");
-
-        const gearEl = $("gearRatioC");
-        if (gearEl) {
-          gearEl.value = String(state.config.gearC);
-          gearEl.onchange = () => { state.config.gearC = Number(gearEl.value); saveConfig(); };
-        }
-      }
-
-      document.querySelectorAll(".face-box").forEach((box) => {
-        box.addEventListener("click", () => {
-          state.activeFace = box.dataset.face;
-          const idx = SCAN_ORDER.indexOf(state.activeFace);
-          if (idx !== -1 && !state.scanCompleted) state.scanIndex = idx;
-          renderAllCubeViews();
-        });
-      });
-
-      document.querySelectorAll(".preset-a").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          state.config.degA = Number(btn.dataset.deg);
-          state.config.spdA = Number(btn.dataset.spd);
-          saveConfig();
-          syncSettingsUI();
-        });
-      });
-
-      document.querySelectorAll(".nudge-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const p = btn.dataset.port;
-          const d = Number(btn.dataset.delta);
-          if (p === "A") rotateMotorDegrees(PORTS.A, d, state.config.spdA, state.config.invA);
-          if (p === "B") rotateMotorDegrees(PORTS.B, d, state.config.spdB, state.config.invB);
-          if (p === "C") rotateMotorDegrees(PORTS.C, d * state.config.gearC, state.config.spdC, state.config.invC);
-        });
-      });
-
-      syncSettingsUI();
-      renderAllCubeViews();
-      renderStepsMonitor();
-      updatePlayPauseUI();
-    })();
-  </script>
-</body>
-</html>
+              const np = path.concat
