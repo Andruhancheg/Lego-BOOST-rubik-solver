@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LEGO Boost Rubik's Cube Solver v0.08</title>
+  <title>LEGO Boost Rubik's Cube Solver v0.09</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -106,7 +106,7 @@
   <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-3 pt-1.5 pb-2.5">
     <!-- Строка версии выше кнопки STOP -->
     <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1.5 px-1">
-      <span id="appVersion" class="text-sky-400 font-bold">v0.08</span>
+      <span id="appVersion" class="text-sky-400 font-bold">v0.09</span>
       <span id="jsStatus" class="text-emerald-400">SYSTEM: READY</span>
     </div>
 
@@ -351,13 +351,18 @@
           </label>
         </div>
 
+        <div class="flex items-center justify-between text-xs bg-slate-950/90 border border-slate-800 rounded-lg px-2.5 py-1.5">
+          <span class="text-slate-400">Автокалибровка упоров:</span>
+          <span id="clawCalibInfo" class="font-mono text-purple-300">Ожидание BT</span>
+        </div>
+
         <div class="space-y-2 text-xs">
           <div>
             <div class="flex justify-between text-slate-300 mb-1">
               <span>Ход клешни (угол):</span>
               <span id="valDegB" class="font-mono text-sky-400 font-bold">65°</span>
             </div>
-            <input id="rangeDegB" type="range" min="20" max="120" step="1" value="65" class="w-full accent-sky-500" />
+            <input id="rangeDegB" type="range" min="20" max="180" step="1" value="65" class="w-full accent-sky-500" />
           </div>
           <div>
             <div class="flex justify-between text-slate-300 mb-1">
@@ -484,8 +489,11 @@
         autoSolving: false,
         mediaStream: null,
         torchOn: false,
+        liveTimer: null,
         liveColors: Array(9).fill("X"),
         activeFace: "F",
+        clawAngleB: 0,
+        clawCalib: { openPos: null, closedPos: null, calibrated: false },
         cubeNet: {
           U: Array(9).fill("X"),
           L: Array(9).fill("X"),
@@ -528,6 +536,16 @@
         return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0").toUpperCase()).join(" ");
       }
 
+      function handleLwpNotification(event) {
+        const dv = event.target.value;
+        if (!dv || dv.byteLength < 4) return;
+        const msgType = dv.getUint8(2);
+        // 0x45: Port Value (Single) — позиция мотора B (0x01) в режиме 0x02 (POS)
+        if (msgType === 0x45 && dv.getUint8(3) === PORTS.B && dv.byteLength >= 8) {
+          state.clawAngleB = dv.getInt32(4, true);
+        }
+      }
+
       function setBtStatus(status) {
         state.btStatus = status;
         const btnBluetooth = $("btnBluetooth");
@@ -553,582 +571,13 @@
         }
       }
 
-      // --- ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ КНОПОК ---
-      window.openSettingsModal = function () {
-        const modal = $("settingsModal");
-        if (modal) {
-          modal.classList.remove("hidden");
-          modal.classList.add("flex");
-        }
-      };
+      // --- АВТОКАЛИБРОВКА КЛЕШНИ ПО СОПРОТИВЛЕНИЮ МОТОРА ---
+      async function setMotorPower(portId, power) {
+        const clamped = Math.max(-100, Math.min(100, Math.round(power)));
+        const pByte = clamped < 0 ? 256 + clamped : clamped;
+        await sendLwpPacket([0x06, 0x00, 0x81, portId, 0x11, 0x51, pByte]);
+      }
 
-      window.closeSettingsModal = function () {
-        const modal = $("settingsModal");
-        if (modal) {
-          modal.classList.add("hidden");
-          modal.classList.remove("flex");
-        }
-      };
-
-      window.toggleDemoMode = function () {
-        state.demoMode = !state.demoMode;
-        const btn = $("btnDemoToggle");
-        if (btn) {
-          btn.textContent = state.demoMode ? "Демо: ВКЛ" : "Демо: ВЫКЛ";
-          btn.classList.toggle("text-emerald-400", state.demoMode);
-        }
-        logMsg("Демо-режим: " + (state.demoMode ? "ВКЛЮЧЕН" : "ВЫКЛЮЧЕН"));
-      };
-
-      window.handleBtClick = async function () {
-        if (state.btStatus === "connected") {
-          if (state.device && state.device.gatt && state.device.gatt.connected) {
-            state.device.gatt.disconnect();
-          }
-          state.characteristic = null;
-          setBtStatus("disconnected");
-          logMsg("BT отключен пользователем");
-          return;
-        }
-
+      async function driveClawUntilStall(power, maxMs = 2800) {
         if (state.demoMode) {
-          setBtStatus("connecting");
-          logMsg("Демо: имитация поиска хаба...");
-          setTimeout(() => {
-            setBtStatus("connected");
-            logMsg("Демо: виртуальный Move Hub подключен");
-          }, 600);
-          return;
-        }
-
-        if (!navigator.bluetooth) {
-          setBtStatus("connecting");
-          setTimeout(() => {
-            setBtStatus("disconnected");
-            alert("Web Bluetooth недоступен в этом окне/браузере. Откройте сайт на GitHub Pages в Chrome/Edge по HTTPS или включите «Демо: ВКЛ» по центру верхней панели.");
-          }, 400);
-          logMsg("Ошибка: navigator.bluetooth недоступен");
-          return;
-        }
-
-        try {
-          setBtStatus("connecting");
-          logMsg("Запрос устройства BLE (LWP 3.0)...");
-          const device = await navigator.bluetooth.requestDevice({
-            filters: [{ services: [LWP_SERVICE_UUID] }]
-          });
-
-          state.device = device;
-          device.addEventListener("gattserverdisconnected", () => {
-            state.characteristic = null;
-            setBtStatus("disconnected");
-            logMsg("Потеряно соединение с хабом!");
-          });
-
-          const server = await device.gatt.connect();
-          const service = await server.getPrimaryService(LWP_SERVICE_UUID);
-          const char = await service.getCharacteristic(LWP_CHAR_UUID);
-          state.characteristic = char;
-
-          setBtStatus("connected");
-          logMsg("Подключено к " + (device.name || "LEGO Move Hub"));
-        } catch (err) {
-          setBtStatus("disconnected");
-          logMsg("BT отмена/ошибка: " + (err && err.message ? err.message : err));
-        }
-      };
-
-      async function sendLwpPacket(bytes) {
-        const packet = new Uint8Array(bytes);
-        logMsg("TX -> " + toHex(packet));
-        if (state.demoMode || !state.characteristic) return;
-        try {
-          await state.characteristic.writeValue(packet);
-        } catch (e) {
-          logMsg("Ошибка TX: " + e.message);
-        }
-      }
-
-      function sleep(ms) {
-        return new Promise((resolve) => setTimeout(resolve, ms));
-      }
-
-      async function rotateMotorDegrees(portId, degrees, speed, invert) {
-        if (state.emergencyStop) return;
-        const signedDeg = Math.round(invert ? -degrees : degrees);
-        if (signedDeg === 0) return;
-
-        const absDeg = Math.abs(signedDeg);
-        const dirSpeed = signedDeg >= 0 ? Math.abs(speed) : -Math.abs(speed);
-        const speedByte = dirSpeed < 0 ? 256 + dirSpeed : dirSpeed;
-
-        const d0 = absDeg & 0xff;
-        const d1 = (absDeg >> 8) & 0xff;
-        const d2 = (absDeg >> 16) & 0xff;
-        const d3 = (absDeg >> 24) & 0xff;
-
-        const cmd = [0x0e, 0x00, 0x81, portId, 0x11, 0x0b, d0, d1, d2, d3, speedByte, 0x64, 0x7f, 0x00];
-        await sendLwpPacket(cmd);
-
-        const waitMs = Math.max(220, Math.round((absDeg / (Math.abs(speed) * 4.2)) * 1000));
-        await sleep(waitMs);
-      }
-
-      window.emergencyStopAll = async function () {
-        state.emergencyStop = true;
-        state.autoSolving = false;
-        logMsg("!!! ЭКСТРЕННАЯ ОСТАНОВКА (STOP) !!!");
-        const stageEl = $("autoStageText");
-        if (stageEl) stageEl.textContent = "ОСТАНОВЛЕНО КНОПКОЙ STOP";
-
-        for (const p of [PORTS.A, PORTS.B, PORTS.C, PORTS.D]) {
-          await sendLwpPacket([0x08, 0x00, 0x81, p, 0x00, 0x51, 0x00, 0x00]);
-        }
-        setTimeout(() => {
-          state.emergencyStop = false;
-        }, 400);
-      };
-
-      // --- КАМЕРА ---
-      let sampleTimer = null;
-
-      window.startCamera = async function () {
-        if (state.mediaStream) return;
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          logMsg("Камера недоступна в текущем окружении");
-          return;
-        }
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: "environment" }, width: { ideal: 480 }, height: { ideal: 480 } },
-            audio: false
-          });
-          state.mediaStream = stream;
-          const videoEl = $("cameraVideo");
-          if (videoEl) videoEl.srcObject = stream;
-          const ph = $("cameraPlaceholder");
-          if (ph) ph.classList.add("hidden");
-          logMsg("Камера запущена");
-
-          const chk = $("chkAutoFlash");
-          if (chk && chk.checked) {
-            await setTorch(true);
-          }
-          startColorSampling();
-        } catch (err) {
-          logMsg("Ошибка камеры: " + err.message);
-        }
-      };
-
-      window.stopCamera = function () {
-        if (sampleTimer) {
-          clearInterval(sampleTimer);
-          sampleTimer = null;
-        }
-        if (state.mediaStream) {
-          state.mediaStream.getTracks().forEach((t) => t.stop());
-          state.mediaStream = null;
-        }
-        const videoEl = $("cameraVideo");
-        if (videoEl) videoEl.srcObject = null;
-        state.torchOn = false;
-        const btnFlash = $("btnFlash");
-        if (btnFlash) btnFlash.textContent = "Вспышка: ВЫКЛ";
-        const ph = $("cameraPlaceholder");
-        if (ph) ph.classList.remove("hidden");
-      };
-
-      async function setTorch(on) {
-        if (!state.mediaStream) return;
-        const track = state.mediaStream.getVideoTracks()[0];
-        if (!track) return;
-        try {
-          const caps = track.getCapabilities ? track.getCapabilities() : {};
-          if (caps.torch) {
-            await track.applyConstraints({ advanced: [{ torch: on }] });
-            state.torchOn = on;
-            const btnFlash = $("btnFlash");
-            if (btnFlash) btnFlash.textContent = on ? "Вспышка: ВКЛ" : "Вспышка: ВЫКЛ";
-            logMsg("Вспышка: " + (on ? "ВКЛ" : "ВЫКЛ"));
-          }
-        } catch (e) {}
-      }
-
-      window.toggleTorch = function () {
-        setTorch(!state.torchOn);
-      };
-
-      function classifyRgb(r, g, b) {
-        let bestKey = "W";
-        let minDist = Infinity;
-        for (const key of COLOR_CYCLE) {
-          const [cr, cg, cb] = COLORS[key].rgb;
-          const dist = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2;
-          if (dist < minDist) {
-            minDist = dist;
-            bestKey = key;
-          }
-        }
-        return bestKey;
-      }
-
-      function startColorSampling() {
-        if (sampleTimer) clearInterval(sampleTimer);
-        const videoEl = $("cameraVideo");
-        const canvasEl = $("captureCanvas");
-        if (!videoEl || !canvasEl) return;
-        const ctx = canvasEl.getContext("2d", { willReadFrequently: true });
-
-        sampleTimer = setInterval(() => {
-          if (!state.mediaStream || videoEl.readyState < 2) return;
-          const size = 180;
-          canvasEl.width = size;
-          canvasEl.height = size;
-          ctx.drawImage(videoEl, 0, 0, size, size);
-
-          const step = size / 3;
-          for (let row = 0; row < 3; row++) {
-            for (let col = 0; col < 3; col++) {
-              const idx = row * 3 + col;
-              const cx = Math.floor(col * step + step / 2);
-              const cy = Math.floor(row * step + step / 2);
-              const data = ctx.getImageData(cx - 4, cy - 4, 9, 9).data;
-              let r = 0, g = 0, b = 0, count = 0;
-              for (let i = 0; i < data.length; i += 4) {
-                r += data[i];
-                g += data[i + 1];
-                b += data[i + 2];
-                count++;
-              }
-              const cKey = classifyRgb(r / count, g / count, b / count);
-              state.liveColors[idx] = cKey;
-              const dot = $("liveDot" + idx);
-              if (dot) dot.style.backgroundColor = COLORS[cKey].hex;
-            }
-          }
-        }, 180);
-      }
-
-      // --- РАЗВЕРТКА ---
-      function renderCubeNet() {
-        document.querySelectorAll(".face-box").forEach((box) => {
-          const face = box.dataset.face;
-          box.classList.toggle("active-face", face === state.activeFace);
-          box.innerHTML = "";
-          state.cubeNet[face].forEach((cKey) => {
-            const st = document.createElement("div");
-            st.className = "sticker";
-            st.style.backgroundColor = COLORS[cKey].hex;
-            box.appendChild(st);
-          });
-        });
-
-        const badge = $("activeFaceBadge");
-        if (badge) badge.textContent = state.activeFace;
-        const title = $("selectedFaceTitle");
-        if (title) title.textContent = FACE_NAMES[state.activeFace];
-
-        const editor = $("activeFaceEditor");
-        if (editor) {
-          editor.innerHTML = "";
-          state.cubeNet[state.activeFace].forEach((cKey, idx) => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "aspect-square rounded-lg border-2 border-slate-700 shadow-inner cursor-pointer";
-            btn.style.backgroundColor = COLORS[cKey].hex;
-            btn.onclick = () => {
-              const curIdx = COLOR_CYCLE.indexOf(cKey);
-              const nextKey = COLOR_CYCLE[(curIdx + 1) % COLOR_CYCLE.length];
-              state.cubeNet[state.activeFace][idx] = nextKey;
-              renderCubeNet();
-            };
-            editor.appendChild(btn);
-          });
-        }
-        validateCubeNet();
-      }
-
-      function validateCubeNet() {
-        const counts = { W: 0, R: 0, B: 0, O: 0, G: 0, Y: 0 };
-        let filled = 0;
-        for (const f of Object.keys(state.cubeNet)) {
-          for (const c of state.cubeNet[f]) {
-            if (counts[c] !== undefined) {
-              counts[c]++;
-              filled++;
-            }
-          }
-        }
-
-        const countersEl = $("colorCounters");
-        if (countersEl) {
-          countersEl.innerHTML = "";
-          for (const k of COLOR_CYCLE) {
-            const span = document.createElement("span");
-            span.style.color = COLORS[k].hex;
-            span.textContent = k + ":" + counts[k];
-            countersEl.appendChild(span);
-          }
-        }
-
-        let allNine = true;
-        for (const k of COLOR_CYCLE) {
-          if (counts[k] !== 9) allNine = false;
-        }
-
-        const badge = $("validationBadge");
-        if (!badge) return false;
-        if (filled < 54) {
-          badge.textContent = "Заполнено: " + filled + "/54";
-          badge.className = "text-[11px] font-mono text-amber-400";
-          return false;
-        }
-        if (!allNine) {
-          badge.textContent = "Ошибка: должно быть по 9 цветов!";
-          badge.className = "text-[11px] font-mono text-rose-400";
-          return false;
-        }
-        badge.textContent = "Развертка корректна (54/54)";
-        badge.className = "text-[11px] font-mono text-emerald-400";
-        return true;
-      }
-
-      window.captureCurrentFace = function () {
-        state.cubeNet[state.activeFace] = [...state.liveColors];
-        renderCubeNet();
-        logMsg("Считаны цвета в грань " + state.activeFace);
-      };
-
-      window.fillDemoCube = function () {
-        const demoMap = { U: "W", L: "O", F: "G", R: "R", B: "B", D: "Y" };
-        for (const f of Object.keys(demoMap)) {
-          state.cubeNet[f] = Array(9).fill(demoMap[f]);
-        }
-        renderCubeNet();
-        logMsg("Развертка заполнена тестовыми цветами");
-      };
-
-      window.clearCubeNet = function () {
-        for (const f of Object.keys(state.cubeNet)) {
-          state.cubeNet[f] = Array(9).fill("X");
-        }
-        renderCubeNet();
-      };
-
-      // --- МОТОРЫ ---
-      window.pushTrolleyA = () => rotateMotorDegrees(PORTS.A, state.config.degA, state.config.spdA, state.config.invA);
-      window.retractTrolleyA = () => rotateMotorDegrees(PORTS.A, -state.config.degA, state.config.spdA, state.config.invA);
-      window.flipCubeCycle = async function () {
-        await window.pushTrolleyA();
-        await sleep(120);
-        await window.retractTrolleyA();
-      };
-
-      window.clampClawB = () => rotateMotorDegrees(PORTS.B, state.config.degB, state.config.spdB, state.config.invB);
-      window.releaseClawB = () => rotateMotorDegrees(PORTS.B, -state.config.degB, state.config.spdB, state.config.invB);
-
-      window.rotatePlatformC = async function (quarters) {
-        const baseDeg = state.config.calib90C * quarters;
-        const backlash = quarters > 0 ? state.config.backlashC : -state.config.backlashC;
-        const motorDeg = (baseDeg + backlash) * state.config.gearC;
-        await rotateMotorDegrees(PORTS.C, motorDeg, state.config.spdC, state.config.invC);
-      };
-
-      // --- АВТОСБОРКА ---
-      window.runAutoSolvePipeline = async function () {
-        if (state.autoSolving) return;
-        if (state.btStatus !== "connected" && !state.demoMode) {
-          alert("Сначала подключите LEGO Move Hub (кнопка BT справа) или включите Демо-режим.");
-          return;
-        }
-
-        state.autoSolving = true;
-        state.emergencyStop = false;
-        const stageEl = $("autoStageText");
-        const pctEl = $("autoPercentText");
-        const barEl = $("autoProgressBar");
-        const movesEl = $("solveMovesDisplay");
-        if (movesEl) movesEl.classList.add("hidden");
-
-        const setProgress = (pct, text) => {
-          if (pctEl) pctEl.textContent = pct + "%";
-          if (barEl) barEl.style.width = pct + "%";
-          if (stageEl) stageEl.textContent = text;
-        };
-
-        try {
-          const scanSequence = [
-            { face: "F", action: null },
-            { face: "R", action: () => window.rotatePlatformC(1) },
-            { face: "B", action: () => window.rotatePlatformC(1) },
-            { face: "L", action: () => window.rotatePlatformC(1) },
-            { face: "U", action: async () => { await window.rotatePlatformC(1); await window.flipCubeCycle(); } },
-            { face: "D", action: async () => { await window.flipCubeCycle(); await window.flipCubeCycle(); } }
-          ];
-
-          for (let i = 0; i < scanSequence.length; i++) {
-            if (state.emergencyStop) return;
-            const step = scanSequence[i];
-            setProgress(Math.round(((i + 1) / 6) * 40), "1/3 Сканирование грани " + step.face + "...");
-            if (step.action) await step.action();
-            await sleep(250);
-
-            state.activeFace = step.face;
-            if (state.mediaStream) {
-              state.cubeNet[step.face] = [...state.liveColors];
-            } else {
-              const demoMap = { U: "W", L: "O", F: "G", R: "R", B: "B", D: "Y" };
-              state.cubeNet[step.face] = Array(9).fill(demoMap[step.face]);
-            }
-            renderCubeNet();
-          }
-
-          setProgress(48, "2/3 Самопроверка 54 наклеек...");
-          await sleep(350);
-          if (!validateCubeNet()) {
-            setProgress(48, "Ошибка самопроверки: исправьте цвета на развертке!");
-            state.autoSolving = false;
-            return;
-          }
-
-          setProgress(55, "3/3 Расчет оптимального решения...");
-          await sleep(300);
-
-          const solutionMoves = ["R", "U", "R'", "U'", "F'", "U", "F", "D2", "L", "B'"];
-          if (movesEl) {
-            movesEl.classList.remove("hidden");
-            movesEl.textContent = "Ходы: " + solutionMoves.join(" ");
-          }
-
-          for (let m = 0; m < solutionMoves.length; m++) {
-            if (state.emergencyStop) return;
-            const move = solutionMoves[m];
-            const pct = 55 + Math.round(((m + 1) / solutionMoves.length) * 45);
-            setProgress(pct, "Сборка: шаг " + (m + 1) + "/" + solutionMoves.length + " (" + move + ")");
-
-            await window.clampClawB();
-            if (move.includes("2")) {
-              await window.rotatePlatformC(2);
-            } else if (move.includes("'")) {
-              await window.rotatePlatformC(-1);
-            } else {
-              await window.rotatePlatformC(1);
-            }
-            await window.releaseClawB();
-            await window.flipCubeCycle();
-          }
-
-          setProgress(100, "Кубик Рубика успешно собран!");
-          logMsg("Автосборка завершена успешно");
-        } finally {
-          state.autoSolving = false;
-        }
-      };
-
-      // --- ИНИЦИАЛИЗАЦИЯ СЛАЙДЕРОВ И ЭЛЕМЕНТОВ ---
-      function initControls() {
-        document.querySelectorAll(".face-box").forEach((box) => {
-          box.onclick = () => {
-            state.activeFace = box.dataset.face;
-            renderCubeNet();
-          };
-        });
-
-        function syncSettingsUi() {
-          $("invA").checked = state.config.invA;
-          $("rangeDegA").value = state.config.degA;
-          $("valDegA").textContent = state.config.degA + "°";
-          $("rangeSpdA").value = state.config.spdA;
-          $("valSpdA").textContent = state.config.spdA + "%";
-
-          $("invB").checked = state.config.invB;
-          $("rangeDegB").value = state.config.degB;
-          $("valDegB").textContent = state.config.degB + "°";
-          $("rangeSpdB").value = state.config.spdB;
-          $("valSpdB").textContent = state.config.spdB + "%";
-
-          $("invC").checked = state.config.invC;
-          $("gearRatioC").value = String(state.config.gearC);
-          $("rangeCalib90C").value = state.config.calib90C;
-          $("valCalib90C").textContent = state.config.calib90C + "°";
-          $("rangeBacklashC").value = state.config.backlashC;
-          $("valBacklashC").textContent = state.config.backlashC + "°";
-          $("rangeSpdC").value = state.config.spdC;
-          $("valSpdC").textContent = state.config.spdC + "%";
-        }
-
-        $("invA").onchange = (e) => { state.config.invA = e.target.checked; saveConfig(); };
-        $("rangeDegA").oninput = (e) => {
-          state.config.degA = Number(e.target.value);
-          $("valDegA").textContent = state.config.degA + "°";
-          saveConfig();
-        };
-        $("rangeSpdA").oninput = (e) => {
-          state.config.spdA = Number(e.target.value);
-          $("valSpdA").textContent = state.config.spdA + "%";
-          saveConfig();
-        };
-        document.querySelectorAll(".preset-a").forEach((btn) => {
-          btn.onclick = () => {
-            state.config.degA = Number(btn.dataset.deg);
-            state.config.spdA = Number(btn.dataset.spd);
-            syncSettingsUi();
-            saveConfig();
-          };
-        });
-
-        $("invB").onchange = (e) => { state.config.invB = e.target.checked; saveConfig(); };
-        $("rangeDegB").oninput = (e) => {
-          state.config.degB = Number(e.target.value);
-          $("valDegB").textContent = state.config.degB + "°";
-          saveConfig();
-        };
-        $("rangeSpdB").oninput = (e) => {
-          state.config.spdB = Number(e.target.value);
-          $("valSpdB").textContent = state.config.spdB + "%";
-          saveConfig();
-        };
-
-        $("invC").onchange = (e) => { state.config.invC = e.target.checked; saveConfig(); };
-        $("gearRatioC").onchange = (e) => { state.config.gearC = Number(e.target.value); saveConfig(); };
-        $("rangeCalib90C").oninput = (e) => {
-          state.config.calib90C = Number(e.target.value);
-          $("valCalib90C").textContent = state.config.calib90C + "°";
-          saveConfig();
-        };
-        $("rangeBacklashC").oninput = (e) => {
-          state.config.backlashC = Number(e.target.value);
-          $("valBacklashC").textContent = state.config.backlashC + "°";
-          saveConfig();
-        };
-        $("rangeSpdC").oninput = (e) => {
-          state.config.spdC = Number(e.target.value);
-          $("valSpdC").textContent = state.config.spdC + "%";
-          saveConfig();
-        };
-
-        document.querySelectorAll(".nudge-btn").forEach((btn) => {
-          btn.onclick = () => {
-            const p = btn.dataset.port;
-            const delta = Number(btn.dataset.delta);
-            const inv = state.config["inv" + p];
-            const spd = state.config["spd" + p];
-            rotateMotorDegrees(PORTS[p], delta, spd, inv);
-          };
-        });
-
-        syncSettingsUi();
-        renderCubeNet();
-        setBtStatus("disconnected");
-        logMsg("Интерфейс v0.08 готов к работе");
-      }
-
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", initControls);
-      } else {
-        initControls();
-      }
-    })();
-  </script>
-</body>
-</html>
+          await
