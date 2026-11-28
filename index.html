@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LEGO Boost Rubik's Cube Solver v0.15</title>
+  <title>LEGO Boost Rubik's Cube Solver v0.16</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -106,7 +106,7 @@
   <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-3 pt-1.5 pb-2.5">
     <!-- Строка версии выше кнопки STOP -->
     <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1.5 px-1">
-      <span id="appVersion" class="text-sky-400 font-bold">v0.15</span>
+      <span id="appVersion" class="text-sky-400 font-bold">v0.16</span>
       <span id="jsStatus" class="text-emerald-400">SYSTEM: READY</span>
     </div>
 
@@ -181,7 +181,7 @@
         <video id="cameraVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
         <canvas id="captureCanvas" class="hidden"></canvas>
 
-        <!-- Сетка 3x3 поверх видео -->
+        <!-- Сетка прицела 3x3 поверх видео -->
         <div id="scanOverlayGrid" class="scan-grid absolute inset-0 pointer-events-none">
           <div class="scan-cell"><span class="scan-dot" id="liveDot0"></span></div>
           <div class="scan-cell"><span class="scan-dot" id="liveDot1"></span></div>
@@ -548,6 +548,17 @@
         D: "D (Низ / Платформа)"
       };
 
+      function createFreshNet() {
+        return {
+          U: Array(9).fill("X"),
+          L: Array(9).fill("X"),
+          F: Array(9).fill("X"),
+          R: Array(9).fill("X"),
+          B: Array(9).fill("X"),
+          D: Array(9).fill("X")
+        };
+      }
+
       const state = {
         btStatus: "disconnected",
         demoMode: false,
@@ -568,14 +579,7 @@
         clawAngleB: 0,
         clawCalib: { openPos: null, closedPos: null, calibrated: false },
         plannedSteps: [],
-        cubeNet: {
-          U: Array(9).fill("X"),
-          L: Array(9).fill("X"),
-          F: Array(9).fill("X"),
-          R: Array(9).fill("X"),
-          B: Array(9).fill("X"),
-          D: Array(9).fill("X")
-        },
+        cubeNet: createFreshNet(),
         config: {
           invA: true, degA: 85, spdA: 85,
           invB: true, degB: 95, spdB: 25,
@@ -584,13 +588,13 @@
       };
 
       try {
-        const saved = localStorage.getItem("lego_rubik_cfg_v015");
+        const saved = localStorage.getItem("lego_rubik_cfg_v016");
         if (saved) Object.assign(state.config, JSON.parse(saved));
       } catch (e) {}
 
       function saveConfig() {
         try {
-          localStorage.setItem("lego_rubik_cfg_v015", JSON.stringify(state.config));
+          localStorage.setItem("lego_rubik_cfg_v016", JSON.stringify(state.config));
         } catch (e) {}
       }
 
@@ -1036,7 +1040,9 @@
       function sampleVideoGrid() {
         const video = $("cameraVideo");
         const canvas = $("captureCanvas");
-        if (!video || !canvas || video.readyState < 2) return null;
+        if (!video || !canvas || video.readyState < 2) {
+          return state.liveColors.slice();
+        }
         const size = 180;
         canvas.width = size;
         canvas.height = size;
@@ -1059,13 +1065,22 @@
             if (dot) dot.style.backgroundColor = COLORS[code].hex;
           }
         }
-        state.liveColors = detected;
-        return detected;
+        state.liveColors = detected.slice();
+        return detected.slice();
       }
 
       function startLivePreviewLoop() {
         if (state.liveTimer) clearInterval(state.liveTimer);
         state.liveTimer = setInterval(sampleVideoGrid, 220);
+      }
+
+      function commitFaceColors(faceKey, colorsArr) {
+        if (!state.cubeNet[faceKey]) return;
+        const safeCopy = Array.from({ length: 9 }, (_, i) => {
+          const val = colorsArr && colorsArr[i];
+          return COLORS[val] ? val : "X";
+        });
+        state.cubeNet[faceKey] = safeCopy;
       }
 
       // --- МОДЕЛЬ КУБИКА, РЕШАТЕЛЬ И ГЕНЕРАЦИЯ ШАГОВ ПОД ВЕРХНЮЮ КАМЕРУ ---
@@ -1465,9 +1480,10 @@
           state.activeFace = currentFace;
           renderAllCubeViews();
 
-          const sampled = sampleVideoGrid() || state.liveColors;
-          state.cubeNet[currentFace] = sampled.slice();
-          logMsg(`Сканирование [${state.scanIndex + 1}/6]: записана грань ${currentFace} (${sampled.join("")})`);
+          await sleep(120);
+          const sampled = sampleVideoGrid();
+          commitFaceColors(currentFace, sampled);
+          logMsg(`Сканирование [${state.scanIndex + 1}/6]: записана грань ${currentFace} (${state.cubeNet[currentFace].join("")})`);
           renderAllCubeViews();
 
           if (state.scanIndex < SCAN_ORDER.length - 1) {
@@ -1485,6 +1501,8 @@
             }
             await window.flipCubeCycle();
             if (state.emergencyStop) return;
+            await sleep(250);
+            sampleVideoGrid();
 
             setScanStatusText(`Грань [${nextFace}] подсвечена и подведена под камеру. Нажмите «Плэй / Шаг» для записи.`, "info");
           } else {
@@ -1505,9 +1523,10 @@
 
       // Записывает текущую грань без переключения подсветки на следующую сторону
       window.captureCurrentFace = function () {
-        const sampled = sampleVideoGrid() || state.liveColors;
-        state.cubeNet[state.activeFace] = sampled.slice();
-        logMsg(`Грань ${state.activeFace} считана: ${sampled.join("")}`);
+        const targetFace = state.activeFace;
+        const sampled = sampleVideoGrid();
+        commitFaceColors(targetFace, sampled);
+        logMsg(`Грань ${targetFace} считана: ${state.cubeNet[targetFace].join("")}`);
 
         renderAllCubeViews();
         updatePlannedStepsFromCube();
@@ -1523,7 +1542,7 @@
           D: Array(9).fill("Y")
         };
         demo = applyAlg(demo, "R U R' U' F2 D' L");
-        state.cubeNet = demo;
+        state.cubeNet = cloneNet(demo);
         state.scanIndex = 0;
         state.scanCompleted = false;
         renderAllCubeViews();
@@ -1532,9 +1551,7 @@
       };
 
       window.clearCubeNet = function () {
-        for (const f of Object.keys(state.cubeNet)) {
-          state.cubeNet[f] = Array(9).fill("X");
-        }
+        state.cubeNet = createFreshNet();
         state.activeFace = "U";
         state.scanIndex = 0;
         state.scanCompleted = false;
@@ -1549,12 +1566,13 @@
       function renderAllCubeViews() {
         document.querySelectorAll(".face-box").forEach((box) => {
           const f = box.dataset.face;
+          const faceColors = state.cubeNet[f] || Array(9).fill("X");
           box.classList.toggle("active-face", f === state.activeFace);
           box.innerHTML = "";
-          state.cubeNet[f].forEach((c) => {
+          faceColors.forEach((c) => {
             const s = document.createElement("div");
             s.className = "sticker";
-            s.style.backgroundColor = COLORS[c].hex;
+            s.style.backgroundColor = (COLORS[c] || COLORS.X).hex;
             box.appendChild(s);
           });
         });
@@ -1566,15 +1584,18 @@
 
         const editor = $("activeFaceEditor");
         if (editor) {
+          const curFaceKey = state.activeFace;
+          const curColors = state.cubeNet[curFaceKey] || Array(9).fill("X");
           editor.innerHTML = "";
-          state.cubeNet[state.activeFace].forEach((c, idx) => {
+          curColors.forEach((c, idx) => {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "aspect-square rounded-md border border-slate-600 cursor-pointer";
-            btn.style.backgroundColor = COLORS[c].hex;
+            btn.style.backgroundColor = (COLORS[c] || COLORS.X).hex;
             btn.onclick = () => {
-              const nextIdx = (COLOR_CYCLE.indexOf(c) + 1) % COLOR_CYCLE.length;
-              state.cubeNet[state.activeFace][idx] = COLOR_CYCLE[nextIdx];
+              const latest = state.cubeNet[curFaceKey][idx];
+              const nextIdx = (COLOR_CYCLE.indexOf(latest) + 1) % COLOR_CYCLE.length;
+              state.cubeNet[curFaceKey][idx] = COLOR_CYCLE[nextIdx];
               renderAllCubeViews();
               updatePlannedStepsFromCube();
             };
