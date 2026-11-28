@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LEGO Boost Rubik's Cube Solver v0.12</title>
+  <title>LEGO Boost Rubik's Cube Solver v0.13</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -106,7 +106,7 @@
   <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-3 pt-1.5 pb-2.5">
     <!-- Строка версии выше кнопки STOP -->
     <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1.5 px-1">
-      <span id="appVersion" class="text-sky-400 font-bold">v0.12</span>
+      <span id="appVersion" class="text-sky-400 font-bold">v0.13</span>
       <span id="jsStatus" class="text-emerald-400">SYSTEM: READY</span>
     </div>
 
@@ -157,37 +157,7 @@
   <!-- ОСНОВНОЙ КОНТЕНТ -->
   <main class="flex-1 max-w-lg w-full mx-auto px-3 pt-3 space-y-4">
 
-    <!-- БЛОК 1: АВТОСБОРКА И КНОПКА ПЛЕЙ / ПАУЗА -->
-    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg">
-      <div class="flex gap-2">
-        <button id="btnAutoSolve" type="button" onclick="window.runAutoSolvePipeline()"
-          class="flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] text-white font-extrabold text-sm sm:text-base tracking-wide shadow-lg shadow-emerald-950/60 flex items-center justify-center gap-2 cursor-pointer">
-          <span class="no-ptr text-lg">▶</span>
-          <span class="no-ptr">АВТОСБОРКА КУБИКА</span>
-        </button>
-
-        <!-- Кнопка Плей / Пауза -->
-        <button id="btnPlayPause" type="button" onclick="window.togglePlayPauseSolve()"
-          class="px-4 py-3.5 rounded-xl bg-sky-600 hover:bg-sky-500 active:scale-95 text-white font-extrabold text-xs sm:text-sm tracking-wide shadow-lg flex items-center justify-center gap-1.5 shrink-0 cursor-pointer">
-          <span id="playPauseIcon" class="no-ptr text-base">⏯</span>
-          <span id="playPauseText" class="no-ptr">ПЛЕЙ / ПАУЗА</span>
-        </button>
-      </div>
-
-      <!-- Статус конвейера автосборки -->
-      <div class="mt-2.5 bg-slate-950 rounded-xl p-2.5 border border-slate-800/80">
-        <div class="flex justify-between text-xs mb-1">
-          <span id="autoStageText" class="text-slate-300 font-medium">Ожидание запуска</span>
-          <span id="autoPercentText" class="font-mono text-sky-400">0%</span>
-        </div>
-        <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-          <div id="autoProgressBar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
-        </div>
-        <div id="solveMovesDisplay" class="mt-2 text-[11px] font-mono text-slate-400 break-words hidden"></div>
-      </div>
-    </section>
-
-    <!-- БЛОК 2: КАМЕРА И СКАНЕР ГРАНИ (ВИД СВЕРХУ) -->
+    <!-- БЛОК 1: КАМЕРА И СКАНЕР ГРАНИ (ВИД СВЕРХУ) -->
     <section class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg space-y-3">
       <div class="flex items-center justify-between">
         <div>
@@ -247,7 +217,7 @@
       </div>
     </section>
 
-    <!-- БЛОК 3: РАЗВЕРТКА ВСЕХ 6 ГРАНЕЙ КУБИКА НА ПЛОСКОСТИ -->
+    <!-- БЛОК 2: РАЗВЕРТКА ВСЕХ 6 ГРАНЕЙ КУБИКА НА ПЛОСКОСТИ -->
     <section class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg space-y-3">
       <div class="flex items-center justify-between">
         <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">2. Развертка граней (54)</h2>
@@ -287,7 +257,7 @@
       </div>
     </section>
 
-    <!-- БЛОК 4: БЫСТРОЕ РУЧНОЕ УПРАВЛЕНИЕ МЕХАНИКОЙ НА ГЛАВНОЙ -->
+    <!-- БЛОК 3: БЫСТРОЕ РУЧНОЕ УПРАВЛЕНИЕ МЕХАНИКОЙ НА ГЛАВНОЙ -->
     <section class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg space-y-2.5">
       <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">3. Ручное управление приводами</h2>
       <div class="grid grid-cols-2 gap-2 text-xs font-bold">
@@ -314,12 +284,47 @@
       </div>
     </section>
 
-    <!-- БЛОК 5: МОНИТОР ШАГОВ СБОРКИ КУБИКА -->
-    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg space-y-2.5">
+    <!-- БЛОК 4: КНОПКИ УПРАВЛЕНИЯ СБОРКОЙ И МОНИТОР ШАГОВ КУБИКА -->
+    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg space-y-3">
       <div class="flex items-center justify-between">
-        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">4. Монитор шагов сборки</h2>
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">4. Сборка и монитор шагов</h2>
         <span id="stepsCountBadge" class="text-[11px] font-mono text-slate-400">0 шагов</span>
       </div>
+
+      <!-- Ряд кнопок управления сборкой над монитором ходов -->
+      <div class="grid grid-cols-3 gap-1.5">
+        <button id="btnAutoSolve" type="button" onclick="window.runAutoSolvePipeline()"
+          class="py-3 px-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-extrabold text-[11px] sm:text-xs tracking-wide shadow-lg shadow-emerald-950/60 flex items-center justify-center gap-1 cursor-pointer">
+          <span class="no-ptr">▶</span>
+          <span class="no-ptr truncate">АВТОСБОРКА</span>
+        </button>
+
+        <button id="btnPlayStep" type="button" onclick="window.runSingleStepSolve()"
+          class="py-3 px-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-extrabold text-[11px] sm:text-xs tracking-wide shadow-lg flex items-center justify-center gap-1 cursor-pointer">
+          <span class="no-ptr">⏭</span>
+          <span class="no-ptr truncate">ПЛЕЙ / ОДИН ШАГ</span>
+        </button>
+
+        <button id="btnPlayPause" type="button" onclick="window.togglePlayPauseSolve()"
+          class="py-3 px-2 rounded-xl bg-sky-600 hover:bg-sky-500 active:scale-95 text-white font-extrabold text-[11px] sm:text-xs tracking-wide shadow-lg flex items-center justify-center gap-1 cursor-pointer">
+          <span id="playPauseIcon" class="no-ptr">⏯</span>
+          <span id="playPauseText" class="no-ptr truncate">ПЛЕЙ / ПАУЗА</span>
+        </button>
+      </div>
+
+      <!-- Статус конвейера автосборки -->
+      <div class="bg-slate-950 rounded-xl p-2.5 border border-slate-800/80">
+        <div class="flex justify-between text-xs mb-1">
+          <span id="autoStageText" class="text-slate-300 font-medium">Ожидание запуска</span>
+          <span id="autoPercentText" class="font-mono text-sky-400">0%</span>
+        </div>
+        <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div id="autoProgressBar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <div id="solveMovesDisplay" class="mt-2 text-[11px] font-mono text-slate-400 break-words hidden"></div>
+      </div>
+
+      <!-- Монитор шагов сборки -->
       <div id="stepsMonitor" class="bg-slate-950 border border-slate-800 rounded-xl p-3 max-h-64 overflow-y-auto space-y-1.5 font-mono text-xs">
         <div class="text-slate-500 text-[11px]">Отсканируйте все 6 граней кубика — здесь появится пошаговый план сборки.</div>
       </div>
@@ -538,6 +543,7 @@
         characteristic: null,
         emergencyStop: false,
         autoSolving: false,
+        steppingSingle: false,
         isPaused: false,
         mediaStream: null,
         torchOn: false,
@@ -563,13 +569,13 @@
       };
 
       try {
-        const saved = localStorage.getItem("lego_rubik_cfg_v012");
+        const saved = localStorage.getItem("lego_rubik_cfg_v013");
         if (saved) Object.assign(state.config, JSON.parse(saved));
       } catch (e) {}
 
       function saveConfig() {
         try {
-          localStorage.setItem("lego_rubik_cfg_v012", JSON.stringify(state.config));
+          localStorage.setItem("lego_rubik_cfg_v013", JSON.stringify(state.config));
         } catch (e) {}
       }
 
@@ -886,6 +892,7 @@
       window.emergencyStopAll = async function () {
         state.emergencyStop = true;
         state.autoSolving = false;
+        state.steppingSingle = false;
         state.isPaused = false;
         updatePlayPauseUI();
         logMsg("!!! STOP: ОСТАНОВКА ВСЕХ ДЕЙСТВИЙ НА ХАБЕ !!!");
@@ -1519,7 +1526,70 @@
         }
       }
 
+      // Выполнение одного ближайшего невыполненного шага с сохранением прогресса
+      window.runSingleStepSolve = async function () {
+        if (state.autoSolving || state.steppingSingle) return;
+        state.emergencyStop = false;
+        state.isPaused = false;
+
+        const stage = $("autoStageText");
+        const pct = $("autoPercentText");
+        const bar = $("autoProgressBar");
+
+        if (!isCubeValid(state.cubeNet)) {
+          if (stage) stage.textContent = "Ошибка: отсканируйте корректно все 6 граней (54 клетки)";
+          logMsg("Один шаг отменен: развертка неполная или некорректная");
+          return;
+        }
+
+        if (!state.plannedSteps.length) {
+          updatePlannedStepsFromCube();
+        }
+
+        const steps = state.plannedSteps;
+        const nextIdx = steps.findIndex((s) => !s.done);
+        if (nextIdx === -1) {
+          if (stage) stage.textContent = "Кубик уже собран!";
+          if (pct) pct.textContent = "100%";
+          if (bar) bar.style.width = "100%";
+          return;
+        }
+
+        state.steppingSingle = true;
+        const step = steps[nextIdx];
+        if (stage) stage.textContent = `Один шаг: ${step.label}`;
+        logMsg(`Выполнение одного шага: ${step.label}`);
+
+        try {
+          for (const act of step.actions) {
+            if (state.emergencyStop) return;
+            await executeRobotAction(act);
+            await sleep(90);
+          }
+
+          if (state.emergencyStop) return;
+          step.done = true;
+          renderStepsMonitor();
+
+          const doneCnt = steps.filter((s) => s.done).length;
+          const p = Math.round((doneCnt / steps.length) * 100);
+          if (pct) pct.textContent = p + "%";
+          if (bar) bar.style.width = p + "%";
+          if (stage) {
+            stage.textContent = doneCnt === steps.length
+              ? "Кубик собран!"
+              : `Выполнен шаг ${step.index}/${steps.length} (ожидание)`;
+          }
+
+          const rowEl = $(`stepRow_${step.index}`);
+          if (rowEl) rowEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        } finally {
+          state.steppingSingle = false;
+        }
+      };
+
       window.runAutoSolvePipeline = async function () {
+        if (state.steppingSingle) return;
         if (state.autoSolving) {
           if (state.isPaused) {
             state.isPaused = false;
